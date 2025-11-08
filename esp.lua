@@ -1,0 +1,915 @@
+-- ESP Library Loadstring Version
+-- Copy this entire script and load with: loadstring(game:HttpGet("URL"))()
+
+local ESPLibrary = {}
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- Default Settings
+ESPLibrary.Settings = {
+    Enabled = true,
+    MaxDistance = 1000,
+    TextSize = 13,
+    Framerate = 1/60,
+    
+    Box = {
+        Enabled = true,
+        Style = 1, -- 1 = Corner, 2 = Full
+        Thickness = 1,
+        Filled = {
+            Enabled = false,
+            Transparency = 0.5
+        }
+    },
+    
+    Tracer = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Origin = 2, -- 1 = Character, 2 = Bottom, 3 = Top, 4 = Center, 5 = Mouse
+        Thickness = 1
+    },
+    
+    HealthBar = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Bar = true,
+        Text = true,
+        Suffix = " HP"
+    },
+    
+    Name = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Style = 1 -- 1 = DisplayName, 2 = Username
+    },
+    
+    Distance = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false}
+    },
+    
+    Skeleton = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Thickness = 1,
+        Transparency = 1
+    },
+    
+    Chams = {
+        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Fill = {
+            Enabled = true,
+            Transparency = 0.5
+        },
+        Outline = {
+            Enabled = true,
+            Transparency = 0
+        },
+        Occlusion = false
+    },
+    
+    Snaplines = {
+        Enabled = false
+    },
+    
+    Checks = {
+        Team = {
+            Enabled = false,
+            SelectedTeams = {enemy = true, friendly = false, generic = true, local = false}
+        },
+        Visible = {
+            Enabled = false,
+            OnlyVisible = false
+        }
+    },
+    
+    currentColors = {
+        enemy = {
+            Box = {
+                Outline = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
+                Fill = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)}
+            },
+            Tracer = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
+            Text = Color3.new(1, 0, 0),
+            Skeleton = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
+            Chams = {
+                Outline = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
+                Fill = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)}
+            },
+            HealthBar = {
+                Outline = Color3.new(0, 0, 0),
+                Fills = {
+                    High = Color3.new(0, 1, 0),
+                    Medium = Color3.new(1, 1, 0),
+                    Low = Color3.new(1, 0, 0)
+                }
+            }
+        },
+        friendly = {
+            Box = {
+                Outline = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
+                Fill = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)}
+            },
+            Tracer = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
+            Text = Color3.new(0, 1, 0),
+            Skeleton = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
+            Chams = {
+                Outline = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
+                Fill = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)}
+            },
+            HealthBar = {
+                Outline = Color3.new(0, 0, 0),
+                Fills = {
+                    High = Color3.new(0, 1, 0),
+                    Medium = Color3.new(1, 1, 0),
+                    Low = Color3.new(1, 0, 0)
+                }
+            }
+        },
+        generic = {
+            Box = {
+                Outline = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
+                Fill = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)}
+            },
+            Tracer = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
+            Text = Color3.new(1, 1, 0),
+            Skeleton = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
+            Chams = {
+                Outline = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
+                Fill = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)}
+            },
+            HealthBar = {
+                Outline = Color3.new(0, 0, 0),
+                Fills = {
+                    High = Color3.new(0, 1, 0),
+                    Medium = Color3.new(1, 1, 0),
+                    Low = Color3.new(1, 0, 0)
+                }
+            }
+        },
+        local = {
+            Box = {
+                Outline = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
+                Fill = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)}
+            },
+            Tracer = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
+            Text = Color3.new(0, 0.5, 1),
+            Skeleton = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
+            Chams = {
+                Outline = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
+                Fill = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)}
+            },
+            HealthBar = {
+                Outline = Color3.new(0, 0, 0),
+                Fills = {
+                    High = Color3.new(0, 1, 0),
+                    Medium = Color3.new(1, 1, 0),
+                    Low = Color3.new(1, 0, 0)
+                }
+            }
+        }
+    }
+}
+
+-- Storage for drawings and objects
+ESPLibrary.Drawings = {
+    ESP = {},
+    Skeleton = {}
+}
+ESPLibrary.Highlights = {}
+
+-- Utility functions
+local function GetTracerOrigin()
+    local origin = ESPLibrary.Settings.Tracer.Origin
+    if origin == 2 then
+        return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    elseif origin == 3 then
+        return Vector2.new(Camera.ViewportSize.X / 2, 0)
+    elseif origin == 4 then
+        return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    elseif origin == 5 then
+        return UserInputService:GetMouseLocation()
+    elseif origin == 1 then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local v3 = Camera:WorldToViewportPoint(LocalPlayer.Character.HumanoidRootPart.Position)
+            return Vector2.new(v3.X, v3.Y)
+        end
+    end
+    return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+end
+
+local function GetPlayerType(Player)
+    local teamType
+    if Player.Neutral then
+        teamType = "generic"
+    else
+        if Player.TeamColor == LocalPlayer.TeamColor then
+            teamType = "friendly"
+        else
+            teamType = "enemy"
+        end
+    end
+
+    if Player == LocalPlayer then
+        teamType = "local"
+    end
+    return teamType
+end
+
+local function GetPlayerColor(Player, isVisible, part, additional)
+    local teamType = GetPlayerType(Player)
+    
+    if part == "HealthBar" and additional == "Fill" then
+        if not Player.Character then return Color3.new(1, 1, 1) end
+        local humanoid = Player.Character:FindFirstChild("Humanoid")
+        if not humanoid then return Color3.new(1, 1, 1) end
+        
+        local maxHealth = humanoid.MaxHealth
+        local currentHealth = humanoid.Health
+        local currentStatus
+        
+        if currentHealth / maxHealth > 0.65 then
+            currentStatus = "High"
+        elseif currentHealth / maxHealth > 0.2 then
+            currentStatus = "Medium"
+        else
+            currentStatus = "Low"
+        end
+        
+        return ESPLibrary.Settings.currentColors[teamType].HealthBar.Fills[currentStatus]
+    elseif part == "Text" then
+        return ESPLibrary.Settings.currentColors[teamType].Text
+    elseif part == "HealthBar" and additional == "Outline" then
+        return ESPLibrary.Settings.currentColors[teamType].HealthBar.Outline
+    end
+
+    if ESPLibrary.Settings.Checks.Visible.Enabled and not isVisible then
+        if additional then
+            return ESPLibrary.Settings.currentColors[teamType][part][additional].Invisible
+        else
+            return ESPLibrary.Settings.currentColors[teamType][part].Invisible
+        end
+    else
+        if additional then
+            return ESPLibrary.Settings.currentColors[teamType][part][additional].Visible
+        else
+            return ESPLibrary.Settings.currentColors[teamType][part].Visible
+        end
+    end
+end
+
+-- Replica system for undetected chams
+local ReplicaSystem = {Replicas = {}}
+
+function ReplicaSystem:CreateReplica(player)
+    if self.Replicas[player] then
+        self:DestroyReplica(player)
+    end
+
+    local character = player.Character
+    if not character then return end
+
+    local replica = Instance.new("Model")
+    replica.Name = "Replica_" .. player.Name
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local size = character:GetExtentsSize()
+    
+    local mainPart = Instance.new("Part")
+    mainPart.Name = "MainReplica"
+    mainPart.Size = size
+    mainPart.Anchored = true
+    mainPart.CanCollide = false
+    mainPart.Massless = true
+    mainPart.Material = Enum.Material.SmoothPlastic
+    mainPart.Transparency = 1
+    mainPart.Parent = replica
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ChamsHighlight"
+    highlight.Parent = replica
+    highlight.Adornee = mainPart
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+    self.Replicas[player] = {
+        Model = replica,
+        Highlight = highlight,
+        MainPart = mainPart
+    }
+
+    return self.Replicas[player]
+end
+
+function ReplicaSystem:UpdateReplica(player, isVisible)
+    local replicaData = self.Replicas[player]
+    if not replicaData then return end
+
+    local character = player.Character
+    if not character then
+        replicaData.Model.Parent = nil
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        replicaData.Model.Parent = nil
+        return
+    end
+
+    replicaData.MainPart.Position = rootPart.Position
+    replicaData.MainPart.CFrame = rootPart.CFrame
+    
+    if replicaData.Model.Parent == nil then
+        replicaData.Model.Parent = workspace
+    end
+
+    local teamType = GetPlayerType(player)
+    local chamsOutlineColor = GetPlayerColor(player, isVisible, "Chams", "Outline")
+    local chamsFillColor = GetPlayerColor(player, isVisible, "Chams", "Fill")
+
+    replicaData.Highlight.FillColor = chamsFillColor
+    replicaData.Highlight.OutlineColor = chamsOutlineColor
+    replicaData.Highlight.FillTransparency = ESPLibrary.Settings.Chams.Fill.Enabled and ESPLibrary.Settings.Chams.Fill.Transparency or 1
+    replicaData.Highlight.OutlineTransparency = ESPLibrary.Settings.Chams.Outline.Enabled and ESPLibrary.Settings.Chams.Outline.Transparency or 1
+    replicaData.Highlight.Enabled = ESPLibrary.Settings.Chams.Enabled[teamType]
+end
+
+function ReplicaSystem:DestroyReplica(player)
+    local replicaData = self.Replicas[player]
+    if replicaData then
+        replicaData.Model:Destroy()
+        self.Replicas[player] = nil
+    end
+end
+
+function ReplicaSystem:Cleanup()
+    for player, replicaData in pairs(self.Replicas) do
+        if not player or not player.Parent then
+            replicaData.Model:Destroy()
+            self.Replicas[player] = nil
+        end
+    end
+end
+
+-- ESP Functions
+function ESPLibrary:CreateESP(Player)
+    local teamType = GetPlayerType(Player)
+
+    local box = {
+        TopLeft = Drawing.new("Line"),
+        TopRight = Drawing.new("Line"),
+        BottomLeft = Drawing.new("Line"),
+        BottomRight = Drawing.new("Line"),
+        Left = Drawing.new("Line"),
+        Right = Drawing.new("Line"),
+        Top = Drawing.new("Line"),
+        Bottom = Drawing.new("Line"),
+    }
+
+    for _, line in pairs(box) do
+        line.Visible = false
+        line.Color = self.Settings.currentColors[teamType].Box.Outline.Visible
+        line.Thickness = self.Settings.Box.Thickness
+    end
+
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false
+    tracer.Color = self.Settings.currentColors[teamType].Tracer.Visible
+    tracer.Thickness = self.Settings.Tracer.Thickness
+
+    local healthBar = {
+        Outline = Drawing.new("Square"),
+        Fill = Drawing.new("Square"),
+        Text = Drawing.new("Text"),
+    }
+
+    for _, obj in pairs(healthBar) do
+        obj.Visible = false
+        if obj == healthBar.Fill then
+            obj.Filled = true
+        elseif obj == healthBar.Text then
+            obj.Center = true
+            obj.Size = self.Settings.TextSize
+            obj.Font = 2
+        else
+            obj.Filled = false
+        end
+    end
+
+    local info = {
+        Name = Drawing.new("Text"),
+        Distance = Drawing.new("Text"),
+    }
+
+    for _, text in pairs(info) do
+        text.Visible = false
+        text.Center = true
+        text.Size = self.Settings.TextSize
+        text.Color = self.Settings.currentColors[teamType].Text
+        text.Font = 2
+        text.Outline = true
+    end
+
+    local snapline = Drawing.new("Line")
+    snapline.Visible = false
+    snapline.Color = self.Settings.currentColors[teamType].Box.Outline.Visible
+    snapline.Thickness = 1
+
+    local skeleton = {
+        Head = Drawing.new("Line"),
+        Neck = Drawing.new("Line"),
+        UpperSpine = Drawing.new("Line"),
+        LowerSpine = Drawing.new("Line"),
+        LeftShoulder = Drawing.new("Line"),
+        LeftUpperArm = Drawing.new("Line"),
+        LeftLowerArm = Drawing.new("Line"),
+        LeftHand = Drawing.new("Line"),
+        RightShoulder = Drawing.new("Line"),
+        RightUpperArm = Drawing.new("Line"),
+        RightLowerArm = Drawing.new("Line"),
+        RightHand = Drawing.new("Line"),
+        LeftHip = Drawing.new("Line"),
+        LeftUpperLeg = Drawing.new("Line"),
+        LeftLowerLeg = Drawing.new("Line"),
+        LeftFoot = Drawing.new("Line"),
+        RightHip = Drawing.new("Line"),
+        RightUpperLeg = Drawing.new("Line"),
+        RightLowerLeg = Drawing.new("Line"),
+        RightFoot = Drawing.new("Line"),
+    }
+
+    for _, line in pairs(skeleton) do
+        line.Visible = false
+        line.Color = self.Settings.currentColors[teamType].Skeleton.Visible
+        line.Thickness = self.Settings.Skeleton.Thickness
+        line.Transparency = self.Settings.Skeleton.Transparency
+    end
+
+    self.Drawings.Skeleton[Player] = skeleton
+    self.Drawings.ESP[Player] = {
+        Box = box,
+        Tracer = tracer,
+        HealthBar = healthBar,
+        Info = info,
+        Snapline = snapline,
+    }
+
+    if self.Settings.Chams.Enabled[teamType] then
+        ReplicaSystem:CreateReplica(Player)
+    end
+end
+
+function ESPLibrary:RemoveESP(Player)
+    local esp = self.Drawings.ESP[Player]
+    if esp then
+        for _, obj in pairs(esp.Box) do
+            pcall(obj.Remove, obj)
+        end
+        pcall(esp.Tracer.Remove, esp.Tracer)
+        for _, obj in pairs(esp.HealthBar) do
+            pcall(obj.Remove, obj)
+        end
+        for _, obj in pairs(esp.Info) do
+            pcall(obj.Remove, obj)
+        end
+        pcall(esp.Snapline.Remove, esp.Snapline)
+        self.Drawings.ESP[Player] = nil
+    end
+
+    local skeleton = self.Drawings.Skeleton[Player]
+    if skeleton then
+        for _, line in pairs(skeleton) do
+            pcall(line.Remove, line)
+        end
+        self.Drawings.Skeleton[Player] = nil
+    end
+
+    ReplicaSystem:DestroyReplica(Player)
+end
+
+function ESPLibrary:UpdateESP(player)
+    if not self.Settings.Enabled then return end
+
+    local esp = self.Drawings.ESP[player]
+    if not esp then return end
+
+    local character = player.Character
+    if not character then
+        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not rootPart or not humanoid or humanoid.Health <= 0 then
+        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+        return
+    end
+
+    local _, isOnScreen = Camera:WorldToViewportPoint(rootPart.Position)
+    if not isOnScreen then
+        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+        return
+    end
+
+    local distance = (rootPart.Position - Camera.CFrame.Position).Magnitude
+    if distance > self.Settings.MaxDistance then
+        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+        return
+    end
+
+    local isVisible = true
+    if isOnScreen and self.Settings.Checks.Visible.Enabled then
+        local obscuringParts = Camera:GetPartsObscuringTarget(
+            {Camera.CFrame.Position, rootPart.Position},
+            {character}
+        )
+        isVisible = #obscuringParts == 0
+        if self.Settings.Checks.Visible.OnlyVisible and not isVisible then
+            self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+            return
+        end
+    end
+
+    local teamType = GetPlayerType(player)
+    if self.Settings.Checks.Team.Enabled then
+        if not self.Settings.Checks.Team.SelectedTeams[teamType] then
+            self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+            return
+        end
+    end
+
+    self:UpdateBoxESP(player, esp, character, rootPart, isVisible, teamType)
+    self:UpdateTracer(player, esp, rootPart, isVisible, teamType)
+    self:UpdateHealthBar(player, esp, humanoid, character, rootPart, isVisible, teamType)
+    self:UpdateInfo(player, esp, rootPart, distance, isVisible, teamType)
+    self:UpdateSkeleton(player, character, isVisible, teamType)
+    self:UpdateChams(player, isVisible, teamType)
+end
+
+function ESPLibrary:HideAllDrawings(esp, skeleton)
+    if esp then
+        for _, obj in pairs(esp.Box) do
+            obj.Visible = false
+        end
+        esp.Tracer.Visible = false
+        for _, obj in pairs(esp.HealthBar) do
+            obj.Visible = false
+        end
+        for _, obj in pairs(esp.Info) do
+            obj.Visible = false
+        end
+        esp.Snapline.Visible = false
+    end
+
+    if skeleton then
+        for _, line in pairs(skeleton) do
+            line.Visible = false
+        end
+    end
+end
+
+function ESPLibrary:UpdateBoxESP(player, esp, character, rootPart, isVisible, teamType)
+    local boxColor = GetPlayerColor(player, isVisible, "Box", "Outline")
+    
+    local size = character:GetExtentsSize()
+    local cf = rootPart.CFrame
+
+    local top = Camera:WorldToViewportPoint(cf * CFrame.new(0, size.Y / 2, 0).Position)
+    local bottom = Camera:WorldToViewportPoint(cf * CFrame.new(0, -size.Y / 2, 0).Position)
+
+    if not top or not bottom or top.Z < 0 or bottom.Z < 0 then
+        for _, obj in pairs(esp.Box) do
+            obj.Visible = false
+        end
+        return
+    end
+
+    local screenSize = bottom.Y - top.Y
+    local boxWidth = screenSize * 0.65
+    local boxPosition = Vector2.new(top.X - boxWidth / 2, top.Y)
+    local boxSize = Vector2.new(boxWidth, screenSize)
+
+    for _, obj in pairs(esp.Box) do
+        obj.Visible = false
+    end
+
+    if self.Settings.Box.Enabled then
+        if self.Settings.Box.Style == 1 then
+            local cornerSize = boxWidth * 0.2
+
+            esp.Box.TopLeft.From = boxPosition
+            esp.Box.TopLeft.To = boxPosition + Vector2.new(cornerSize, 0)
+            esp.Box.TopLeft.Visible = true
+
+            esp.Box.TopRight.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.TopRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, 0)
+            esp.Box.TopRight.Visible = true
+
+            esp.Box.BottomLeft.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.BottomLeft.To = boxPosition + Vector2.new(cornerSize, boxSize.Y)
+            esp.Box.BottomLeft.Visible = true
+
+            esp.Box.BottomRight.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.BottomRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, boxSize.Y)
+            esp.Box.BottomRight.Visible = true
+
+            esp.Box.Left.From = boxPosition
+            esp.Box.Left.To = boxPosition + Vector2.new(0, cornerSize)
+            esp.Box.Left.Visible = true
+
+            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, cornerSize)
+            esp.BBox.Right.Visible = true
+
+            esp.Box.Top.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Top.To = boxPosition + Vector2.new(0, boxSize.Y - cornerSize)
+            esp.Box.Top.Visible = true
+
+            esp.Box.Bottom.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y - cornerSize)
+            esp.Box.Bottom.Visible = true
+        else
+            esp.Box.Left.From = boxPosition
+            esp.Box.Left.To = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Left.Visible = true
+
+            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Right.Visible = true
+
+            esp.Box.Top.From = boxPosition
+            esp.Box.Top.To = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Top.Visible = true
+
+            esp.Box.Bottom.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Bottom.Visible = true
+        end
+
+        for _, obj in pairs(esp.Box) do
+            if obj.Visible then
+                obj.Color = boxColor
+                obj.Thickness = self.Settings.Box.Thickness
+            end
+        end
+    end
+end
+
+function ESPLibrary:UpdateTracer(player, esp, rootPart, isVisible, teamType)
+    if self.Settings.Tracer.Enabled[teamType] then
+        local pos = Camera:WorldToViewportPoint(rootPart.Position)
+        esp.Tracer.From = GetTracerOrigin()
+        esp.Tracer.To = Vector2.new(pos.X, pos.Y)
+        esp.Tracer.Color = GetPlayerColor(player, isVisible, "Tracer")
+        esp.Tracer.Visible = true
+    else
+        esp.Tracer.Visible = false
+    end
+end
+
+function ESPLibrary:UpdateHealthBar(player, esp, humanoid, character, rootPart, isVisible, teamType)
+    if self.Settings.HealthBar.Enabled[teamType] then
+        local health = humanoid.Health
+        local maxHealth = humanoid.MaxHealth
+        local healthPercent = health / maxHealth
+
+        local size = character:GetExtentsSize()
+        local top = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, size.Y / 2, 0).Position)
+        local bottom = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, -size.Y / 2, 0).Position)
+        
+        local screenSize = bottom.Y - top.Y
+        local barHeight = screenSize * 0.8
+        local barWidth = 4
+        local barPos = Vector2.new(top.X - screenSize * 0.65 / 2 - barWidth - 2, top.Y + (screenSize - barHeight) / 2)
+
+        if self.Settings.HealthBar.Bar then
+            esp.HealthBar.Outline.Size = Vector2.new(barWidth, barHeight)
+            esp.HealthBar.Outline.Position = barPos
+            esp.HealthBar.Outline.Visible = true
+            esp.HealthBar.Outline.Color = GetPlayerColor(player, isVisible, "HealthBar", "Outline")
+
+            esp.HealthBar.Fill.Size = Vector2.new(barWidth - 2, barHeight * healthPercent)
+            esp.HealthBar.Fill.Position = Vector2.new(barPos.X + 1, barPos.Y + barHeight * (1 - healthPercent))
+            esp.HealthBar.Fill.Color = GetPlayerColor(player, isVisible, "HealthBar", "Fill")
+            esp.HealthBar.Fill.Visible = true
+        else
+            esp.HealthBar.Outline.Visible = false
+            esp.HealthBar.Fill.Visible = false
+        end
+
+        if self.Settings.HealthBar.Text then
+            esp.HealthBar.Text.Text = math.floor(health) .. self.Settings.HealthBar.Suffix
+            esp.HealthBar.Text.Position = Vector2.new(barPos.X + barWidth + 2, barPos.Y + barHeight / 2)
+            esp.HealthBar.Text.Color = GetPlayerColor(player, isVisible, "HealthBar", "Fill")
+            esp.HealthBar.Text.Visible = true
+        else
+            esp.HealthBar.Text.Visible = false
+        end
+    else
+        for _, obj in pairs(esp.HealthBar) do
+            obj.Visible = false
+        end
+    end
+end
+
+function ESPLibrary:UpdateInfo(player, esp, rootPart, distance, isVisible, teamType)
+    local size = rootPart.Parent:GetExtentsSize()
+    local top = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, size.Y / 2, 0).Position)
+    local bottom = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, -size.Y / 2, 0).Position)
+    
+    local screenSize = bottom.Y - top.Y
+    local boxWidth = screenSize * 0.65
+    local boxPosition = Vector2.new(top.X - boxWidth / 2, top.Y)
+
+    if self.Settings.Name.Enabled[teamType] then
+        esp.Info.Name.Text = self.Settings.Name.Style == 2 and player.Name or player.DisplayName
+        esp.Info.Name.Position = Vector2.new(boxPosition.X + boxWidth / 2, boxPosition.Y - 20)
+        esp.Info.Name.Color = GetPlayerColor(player, isVisible, "Text")
+        esp.Info.Name.Visible = true
+    else
+        esp.Info.Name.Visible = false
+    end
+
+    if self.Settings.Distance.Enabled[teamType] then
+        esp.Info.Distance.Text = math.floor(distance) .. "m"
+        esp.Info.Distance.Position = Vector2.new(boxPosition.X + boxWidth / 2, boxPosition.Y + screenSize + 5)
+        esp.Info.Distance.Color = GetPlayerColor(player, isVisible, "Text")
+        esp.Info.Distance.Visible = true
+    else
+        esp.Info.Distance.Visible = false
+    end
+end
+
+function ESPLibrary:UpdateSkeleton(player, character, isVisible, teamType)
+    local skeleton = self.Drawings.Skeleton[player]
+    if not skeleton or not self.Settings.Skeleton.Enabled[teamType] then return end
+
+    local function getBone(boneName)
+        return character:FindFirstChild(boneName) or character:FindFirstChild(boneName:gsub("Upper", ""):gsub("Lower", ""))
+    end
+
+    local bones = {
+        Head = getBone("Head"),
+        UpperTorso = getBone("UpperTorso") or getBone("Torso"),
+        LowerTorso = getBone("LowerTorso"),
+        LeftUpperArm = getBone("LeftUpperArm"),
+        LeftLowerArm = getBone("LeftLowerArm"),
+        LeftHand = getBone("LeftHand"),
+        RightUpperArm = getBone("RightUpperArm"),
+        RightLowerArm = getBone("RightLowerArm"),
+        RightHand = getBone("RightHand"),
+        LeftUpperLeg = getBone("LeftUpperLeg"),
+        LeftLowerLeg = getBone("LeftLowerLeg"),
+        LeftFoot = getBone("LeftFoot"),
+        RightUpperLeg = getBone("RightUpperLeg"),
+        RightLowerLeg = getBone("RightLowerLeg"),
+        RightFoot = getBone("RightFoot"),
+    }
+
+    for _, line in pairs(skeleton) do
+        line.Visible = false
+    end
+
+    local function drawBone(fromBone, toBone, line)
+        if not fromBone or not toBone then return end
+
+        local fromPos = fromBone.Position
+        local toPos = toBone.Position
+
+        local fromScreen, fromVisible = Camera:WorldToViewportPoint(fromPos)
+        local toScreen, toVisible = Camera:WorldToViewportPoint(toPos)
+
+        if fromVisible and toVisible and fromScreen.Z > 0 and toScreen.Z > 0 then
+            line.From = Vector2.new(fromScreen.X, fromScreen.Y)
+            line.To = Vector2.new(toScreen.X, toScreen.Y)
+            line.Color = GetPlayerColor(player, isVisible, "Skeleton")
+            line.Visible = true
+        end
+    end
+
+    drawBone(bones.Head, bones.UpperTorso, skeleton.Head)
+    drawBone(bones.UpperTorso, bones.LowerTorso, skeleton.UpperSpine)
+    
+    drawBone(bones.UpperTorso, bones.LeftUpperArm, skeleton.LeftShoulder)
+    drawBone(bones.LeftUpperArm, bones.LeftLowerArm, skeleton.LeftUpperArm)
+    drawBone(bones.LeftLowerArm, bones.LeftHand, skeleton.LeftLowerArm)
+    
+    drawBone(bones.UpperTorso, bones.RightUpperArm, skeleton.RightShoulder)
+    drawBone(bones.RightUpperArm, bones.RightLowerArm, skeleton.RightUpperArm)
+    drawBone(bones.RightLowerArm, bones.RightHand, skeleton.RightLowerArm)
+    
+    drawBone(bones.LowerTorso, bones.LeftUpperLeg, skeleton.LeftHip)
+    drawBone(bones.LeftUpperLeg, bones.LeftLowerLeg, skeleton.LeftUpperLeg)
+    drawBone(bones.LeftLowerLeg, bones.LeftFoot, skeleton.LeftLowerLeg)
+    
+    drawBone(bones.LowerTorso, bones.RightUpperLeg, skeleton.RightHip)
+    drawBone(bones.RightUpperLeg, bones.RightLowerLeg, skeleton.RightUpperLeg)
+    drawBone(bones.RightLowerLeg, bones.RightFoot, skeleton.RightLowerLeg)
+end
+
+function ESPLibrary:UpdateChams(player, isVisible, teamType)
+    if self.Settings.Chams.Enabled[teamType] then
+        ReplicaSystem:UpdateReplica(player, isVisible)
+    else
+        local replicaData = ReplicaSystem.Replicas[player]
+        if replicaData then
+            replicaData.Highlight.Enabled = false
+        end
+    end
+end
+
+-- Main loop and player management
+function ESPLibrary:Start()
+    -- Create ESP for existing players
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            self:CreateESP(player)
+        end
+    end
+
+    -- Handle new players
+    Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function()
+            wait(1) -- Wait for character to fully load
+            self:CreateESP(player)
+        end)
+        
+        if player.Character then
+            self:CreateESP(player)
+        end
+    end)
+
+    -- Handle player removal
+    Players.PlayerRemoving:Connect(function(player)
+        self:RemoveESP(player)
+    end)
+
+    -- Main update loop
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        if not self.Settings.Enabled then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local esp = self.Drawings.ESP[player]
+                    if esp then
+                        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+                    end
+                end
+            end
+            return
+        end
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                self:UpdateESP(player)
+            end
+        end
+    end)
+
+    -- Store connection for cleanup
+    self.Connection = connection
+end
+
+function ESPLibrary:Stop()
+    if self.Connection then
+        self.Connection:Disconnect()
+        self.Connection = nil
+    end
+
+    -- Remove all ESP
+    for _, player in pairs(Players:GetPlayers()) do
+        self:RemoveESP(player)
+    end
+
+    -- Cleanup replicas
+    ReplicaSystem:Cleanup()
+end
+
+-- Configuration functions
+function ESPLibrary:Toggle()
+    self.Settings.Enabled = not self.Settings.Enabled
+    return self.Settings.Enabled
+end
+
+function ESPLibrary:SetColor(teamType, element, color, invisibleColor)
+    if invisibleColor then
+        self.Settings.currentColors[teamType][element].Visible = color
+        self.Settings.currentColors[teamType][element].Invisible = invisibleColor
+    else
+        self.Settings.currentColors[teamType][element] = color
+    end
+end
+
+function ESPLibrary:SetSetting(category, setting, value)
+    if self.Settings[category] then
+        self.Settings[category][setting] = value
+    end
+end
+
+-- Auto-start the ESP
+ESPLibrary:Start()
+
+return ESPLibrary
