@@ -28,35 +28,35 @@ ESPLibrary.Settings = {
     },
     
     Tracer = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
         Origin = 2, -- 1 = Character, 2 = Bottom, 3 = Top, 4 = Center, 5 = Mouse
         Thickness = 1
     },
     
     HealthBar = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
         Bar = true,
         Text = true,
         Suffix = " HP"
     },
     
     Name = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
         Style = 1 -- 1 = DisplayName, 2 = Username
     },
     
     Distance = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false}
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false}
     },
     
     Skeleton = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
         Thickness = 1,
         Transparency = 1
     },
     
     Chams = {
-        Enabled = {enemy = true, friendly = false, generic = true, local = false},
+        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
         Fill = {
             Enabled = true,
             Transparency = 0.5
@@ -75,7 +75,7 @@ ESPLibrary.Settings = {
     Checks = {
         Team = {
             Enabled = false,
-            SelectedTeams = {enemy = true, friendly = false, generic = true, local = false}
+            SelectedTeams = {enemy = true, friendly = false, generic = true, ["local"] = false}
         },
         Visible = {
             Enabled = false,
@@ -147,7 +147,7 @@ ESPLibrary.Settings = {
                 }
             }
         },
-        local = {
+        ["local"] = {
             Box = {
                 Outline = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
                 Fill = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)}
@@ -211,7 +211,7 @@ local function GetPlayerType(Player)
     end
 
     if Player == LocalPlayer then
-        teamType = "local"
+        teamType = "local"  -- This string value is fine, it's the table key that needs quotes
     end
     return teamType
 end
