@@ -1,916 +1,1696 @@
--- ESP Library Loadstring Version
--- Copy this entire script and load with: loadstring(game:HttpGet("URL"))()
+local PERM = {}
+do
+    local p = {151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+               247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,
+               68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,
+               244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,
+               109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,
+               182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,
+               108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,
+               235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,
+               222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180}
+    for i = 0, 255 do PERM[i] = p[(i % 256) + 1] end
+    for i = 256, 511 do PERM[i] = PERM[i - 256] end
+end
 
-local ESPLibrary = {}
+local function Fade(t) return t * t * t * (t * (t * 6 - 15) + 10) end
+local function Lerp(a, b, t) return a + t * (b - a) end
+local function Grad(hash, x, y)
+    local h = hash % 4
+    if h == 0 then return x + y
+    elseif h == 1 then return -x + y
+    elseif h == 2 then return x - y
+    else return -x - y end
+end
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
+-- 2D Perlin noise, returns [-1, 1]
+local function Perlin2D(x, y)
+    local xi = math.floor(x) % 256
+    local yi = math.floor(y) % 256
+    local xf = x - math.floor(x)
+    local yf = y - math.floor(y)
+    local u = Fade(xf)
+    local v = Fade(yf)
+    local aa = PERM[PERM[xi] + yi]
+    local ab = PERM[PERM[xi] + yi + 1]
+    local ba = PERM[PERM[xi + 1] + yi]
+    local bb = PERM[PERM[xi + 1] + yi + 1]
+    return Lerp(
+        Lerp(Grad(aa, xf, yf), Grad(ba, xf - 1, yf), u),
+        Lerp(Grad(ab, xf, yf - 1), Grad(bb, xf - 1, yf - 1), u),
+        v
+    )
+end
 
--- Default Settings
-ESPLibrary.Settings = {
-    Enabled = true,
-    MaxDistance = 1000,
-    TextSize = 13,
-    Framerate = 1/60,
-    
-    Box = {
-        Enabled = true,
-        Style = 1, -- 1 = Corner, 2 = Full
-        Thickness = 1,
-        Filled = {
-            Enabled = false,
-            Transparency = 0.5
-        }
-    },
-    
-    Tracer = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
-        Origin = 2, -- 1 = Character, 2 = Bottom, 3 = Top, 4 = Center, 5 = Mouse
-        Thickness = 1
-    },
-    
-    HealthBar = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
-        Bar = true,
-        Text = true,
-        Suffix = " HP"
-    },
-    
-    Name = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
-        Style = 1 -- 1 = DisplayName, 2 = Username
-    },
-    
-    Distance = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false}
-    },
-    
-    Skeleton = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
-        Thickness = 1,
-        Transparency = 1
-    },
-    
-    Chams = {
-        Enabled = {enemy = true, friendly = false, generic = true, ["local"] = false},
-        Fill = {
-            Enabled = true,
-            Transparency = 0.5
-        },
-        Outline = {
-            Enabled = true,
-            Transparency = 0
-        },
-        Occlusion = false
-    },
-    
-    Snaplines = {
-        Enabled = false
-    },
-    
-    Checks = {
-        Team = {
-            Enabled = false,
-            SelectedTeams = {enemy = true, friendly = false, generic = true, ["local"] = false}
-        },
-        Visible = {
-            Enabled = false,
-            OnlyVisible = false
-        }
-    },
-    
-    currentColors = {
-        enemy = {
-            Box = {
-                Outline = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
-                Fill = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)}
-            },
-            Tracer = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
-            Text = Color3.new(1, 0, 0),
-            Skeleton = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
-            Chams = {
-                Outline = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)},
-                Fill = {Visible = Color3.new(1, 0, 0), Invisible = Color3.new(0.5, 0, 0)}
-            },
-            HealthBar = {
-                Outline = Color3.new(0, 0, 0),
-                Fills = {
-                    High = Color3.new(0, 1, 0),
-                    Medium = Color3.new(1, 1, 0),
-                    Low = Color3.new(1, 0, 0)
-                }
-            }
-        },
-        friendly = {
-            Box = {
-                Outline = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
-                Fill = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)}
-            },
-            Tracer = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
-            Text = Color3.new(0, 1, 0),
-            Skeleton = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
-            Chams = {
-                Outline = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)},
-                Fill = {Visible = Color3.new(0, 1, 0), Invisible = Color3.new(0, 0.5, 0)}
-            },
-            HealthBar = {
-                Outline = Color3.new(0, 0, 0),
-                Fills = {
-                    High = Color3.new(0, 1, 0),
-                    Medium = Color3.new(1, 1, 0),
-                    Low = Color3.new(1, 0, 0)
-                }
-            }
-        },
-        generic = {
-            Box = {
-                Outline = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
-                Fill = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)}
-            },
-            Tracer = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
-            Text = Color3.new(1, 1, 0),
-            Skeleton = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
-            Chams = {
-                Outline = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)},
-                Fill = {Visible = Color3.new(1, 1, 0), Invisible = Color3.new(0.5, 0.5, 0)}
-            },
-            HealthBar = {
-                Outline = Color3.new(0, 0, 0),
-                Fills = {
-                    High = Color3.new(0, 1, 0),
-                    Medium = Color3.new(1, 1, 0),
-                    Low = Color3.new(1, 0, 0)
-                }
-            }
-        },
-        ["local"] = {
-            Box = {
-                Outline = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
-                Fill = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)}
-            },
-            Tracer = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
-            Text = Color3.new(0, 0.5, 1),
-            Skeleton = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
-            Chams = {
-                Outline = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)},
-                Fill = {Visible = Color3.new(0, 0.5, 1), Invisible = Color3.new(0, 0.25, 0.5)}
-            },
-            HealthBar = {
-                Outline = Color3.new(0, 0, 0),
-                Fills = {
-                    High = Color3.new(0, 1, 0),
-                    Medium = Color3.new(1, 1, 0),
-                    Low = Color3.new(1, 0, 0)
-                }
-            }
-        }
-    }
+-- Fractal Brownian Motion - layered noise for organic movement
+local function FBM(x, y, octaves, lacunarity, gain)
+    octaves = octaves or 4
+    lacunarity = lacunarity or 2.0
+    gain = gain or 0.5
+    local sum = 0
+    local amp = 1
+    local freq = 1
+    local maxAmp = 0
+    for i = 1, octaves do
+        sum = sum + amp * Perlin2D(x * freq, y * freq)
+        maxAmp = maxAmp + amp
+        amp = amp * gain
+        freq = freq * lacunarity
+    end
+    return sum / maxAmp
+end
+
+-- Golden ratio for non-repeating phase distribution
+local PHI = (1 + math.sqrt(5)) / 2
+local TAU = math.pi * 2
+
+-- Asymmetric heartbeat waveform: fast attack, slow decay
+local function HeartbeatWave(t, bpm)
+    local period = 60 / (bpm or 72)
+    local phase = (t % period) / period
+    -- Double-peak cardiac waveform
+    local p1 = math.exp(-((phase - 0.12) * 18) ^ 2) -- systolic peak
+    local p2 = math.exp(-((phase - 0.28) * 22) ^ 2) * 0.45 -- dicrotic notch bounce
+    local base = math.exp(-phase * 4) * 0.15 -- baseline decay
+    return math.clamp(p1 + p2 + base, 0, 1)
+end
+
+-- Poisson-distributed random event generator
+local PoissonState = {}
+local function PoissonEvent(id, rate, dt)
+    if not PoissonState[id] then PoissonState[id] = {timer = 0, active = false, cooldown = 0} end
+    local s = PoissonState[id]
+    s.cooldown = s.cooldown - dt
+    if s.cooldown <= 0 then
+        -- Probability of event in this frame: 1 - e^(-rate * dt)
+        if math.random() < (1 - math.exp(-rate * dt)) then
+            s.active = true
+            s.timer = 0.05 + math.random() * 0.1 -- event duration
+            s.cooldown = 0.1 / rate -- minimum gap
+            return true
+        end
+    end
+    if s.active then
+        s.timer = s.timer - dt
+        if s.timer <= 0 then s.active = false end
+    end
+    return s.active
+end
+
+-- Attempt hash for stable per-player randomness
+local function StableHash(player, partIndex)
+    local uid = player.UserId or 0
+    return ((uid * 2654435761 + partIndex * 340573321) % 2147483647) / 2147483647
+end
+
+-- HSV utilities
+local function ToHSV(c) return Color3.toHSV(c) end
+local function FromHSV(h, s, v) return Color3.fromHSV(h % 1, math.clamp(s, 0, 1), math.clamp(v, 0, 1)) end
+local function LerpColor3(c1, c2, a)
+    return Color3.new(
+        c1.R + (c2.R - c1.R) * a,
+        c1.G + (c2.G - c1.G) * a,
+        c1.B + (c2.B - c1.B) * a
+    )
+end
+
+-- Attempt smoothstep for nice easing
+local function Smoothstep(edge0, edge1, x)
+    local t = math.clamp((x - edge0) / (edge1 - edge0), 0, 1)
+    return t * t * (3 - 2 * t)
+end
+
+local function InverseSmoothstep(x)
+    return 0.5 - math.sin(math.asin(1 - 2 * math.clamp(x, 0, 1)) / 3)
+end
+
+
+-- ============================================
+-- ESP MODE DEFINITIONS
+-- ============================================
+-- Each mode is a table with:
+--   .Name: display name
+--   .Description: tooltip
+--   .Setup(player, character, baseColor, isTeammate) -> layerData
+--   .Update(player, layerData, baseColor, dt, globalTime) -> nil (mutates layers in place)
+--   .Cleanup(layerData) -> nil
+
+ESPModes = {}
+
+-- Part index map for spatial calculations
+local PartSpatialIndex = {
+    ["Left Leg"] = {x = -0.5, y = -2, index = 0},
+    ["Right Leg"] = {x = 0.5, y = -2, index = 1},
+    ["Torso"] = {x = 0, y = 0, index = 2},
+    ["Left Arm"] = {x = -1.5, y = 0, index = 3},
+    ["Right Arm"] = {x = 1.5, y = 0, index = 4},
+    ["Head"] = {x = 0, y = 1.5, index = 5},
 }
 
--- Storage for drawings and objects
-ESPLibrary.Drawings = {
-    ESP = {},
-    Skeleton = {}
-}
-ESPLibrary.Highlights = {}
-
--- Utility functions
-local function GetTracerOrigin()
-    local origin = ESPLibrary.Settings.Tracer.Origin
-    if origin == 2 then
-        return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-    elseif origin == 3 then
-        return Vector2.new(Camera.ViewportSize.X / 2, 0)
-    elseif origin == 4 then
-        return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    elseif origin == 5 then
-        return UserInputService:GetMouseLocation()
-    elseif origin == 1 then
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local v3 = Camera:WorldToViewportPoint(LocalPlayer.Character.HumanoidRootPart.Position)
-            return Vector2.new(v3.X, v3.Y)
-        end
-    end
-    return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-end
-
-local function GetPlayerType(Player)
-    local teamType
-    if Player.Neutral then
-        teamType = "generic"
-    else
-        if Player.TeamColor == LocalPlayer.TeamColor then
-            teamType = "friendly"
-        else
-            teamType = "enemy"
-        end
-    end
-
-    if Player == LocalPlayer then
-        teamType = "local"  -- This string value is fine, it's the table key that needs quotes
-    end
-    return teamType
-end
-
-local function GetPlayerColor(Player, isVisible, part, additional)
-    local teamType = GetPlayerType(Player)
+-- ============================================
+-- MODE 1: CLASSIC CS2 GLOW
+-- Multi-layer fresnel-approximated glow with inner/outer separation
+-- ============================================
+ESPModes["CS2 Glow"] = {
+    Name = "CS2 Glow",
+    Description = "Multi-layer glow with inner/outer color separation and edge bloom",
     
-    if part == "HealthBar" and additional == "Fill" then
-        if not Player.Character then return Color3.new(1, 1, 1) end
-        local humanoid = Player.Character:FindFirstChild("Humanoid")
-        if not humanoid then return Color3.new(1, 1, 1) end
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
         
-        local maxHealth = humanoid.MaxHealth
-        local currentHealth = humanoid.Health
-        local currentStatus
+        -- Layer 1: Inner core highlight (tight, bright, low fill)
+        local hlInner = Instance.new("Highlight")
+        hlInner.Name = "X3_ESP_Inner"
+        hlInner.Adornee = character
+        hlInner.FillColor = baseColor
+        hlInner.FillTransparency = 0.82
+        hlInner.OutlineColor = baseColor
+        hlInner.OutlineTransparency = 0.0
+        hlInner.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hlInner.Parent = character
+        table.insert(layers.highlights, hlInner)
         
-        if currentHealth / maxHealth > 0.65 then
-            currentStatus = "High"
-        elseif currentHealth / maxHealth > 0.2 then
-            currentStatus = "Medium"
-        else
-            currentStatus = "Low"
-        end
-        
-        return ESPLibrary.Settings.currentColors[teamType].HealthBar.Fills[currentStatus]
-    elseif part == "Text" then
-        return ESPLibrary.Settings.currentColors[teamType].Text
-    elseif part == "HealthBar" and additional == "Outline" then
-        return ESPLibrary.Settings.currentColors[teamType].HealthBar.Outline
-    end
-
-    if ESPLibrary.Settings.Checks.Visible.Enabled and not isVisible then
-        if additional then
-            return ESPLibrary.Settings.currentColors[teamType][part][additional].Invisible
-        else
-            return ESPLibrary.Settings.currentColors[teamType][part].Invisible
-        end
-    else
-        if additional then
-            return ESPLibrary.Settings.currentColors[teamType][part][additional].Visible
-        else
-            return ESPLibrary.Settings.currentColors[teamType][part].Visible
-        end
-    end
-end
-
--- Replica system for undetected chams
-local ReplicaSystem = {Replicas = {}}
-
-function ReplicaSystem:CreateReplica(player)
-    if self.Replicas[player] then
-        self:DestroyReplica(player)
-    end
-
-    local character = player.Character
-    if not character then return end
-
-    local replica = Instance.new("Model")
-    replica.Name = "Replica_" .. player.Name
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local size = character:GetExtentsSize()
-    
-    local mainPart = Instance.new("Part")
-    mainPart.Name = "MainReplica"
-    mainPart.Size = size
-    mainPart.Anchored = true
-    mainPart.CanCollide = false
-    mainPart.Massless = true
-    mainPart.Material = Enum.Material.SmoothPlastic
-    mainPart.Transparency = 1
-    mainPart.Parent = replica
-    
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "ChamsHighlight"
-    highlight.Parent = replica
-    highlight.Adornee = mainPart
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-
-    self.Replicas[player] = {
-        Model = replica,
-        Highlight = highlight,
-        MainPart = mainPart
-    }
-
-    return self.Replicas[player]
-end
-
-function ReplicaSystem:UpdateReplica(player, isVisible)
-    local replicaData = self.Replicas[player]
-    if not replicaData then return end
-
-    local character = player.Character
-    if not character then
-        replicaData.Model.Parent = nil
-        return
-    end
-
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then
-        replicaData.Model.Parent = nil
-        return
-    end
-
-    replicaData.MainPart.Position = rootPart.Position
-    replicaData.MainPart.CFrame = rootPart.CFrame
-    
-    if replicaData.Model.Parent == nil then
-        replicaData.Model.Parent = workspace
-    end
-
-    local teamType = GetPlayerType(player)
-    local chamsOutlineColor = GetPlayerColor(player, isVisible, "Chams", "Outline")
-    local chamsFillColor = GetPlayerColor(player, isVisible, "Chams", "Fill")
-
-    replicaData.Highlight.FillColor = chamsFillColor
-    replicaData.Highlight.OutlineColor = chamsOutlineColor
-    replicaData.Highlight.FillTransparency = ESPLibrary.Settings.Chams.Fill.Enabled and ESPLibrary.Settings.Chams.Fill.Transparency or 1
-    replicaData.Highlight.OutlineTransparency = ESPLibrary.Settings.Chams.Outline.Enabled and ESPLibrary.Settings.Chams.Outline.Transparency or 1
-    replicaData.Highlight.Enabled = ESPLibrary.Settings.Chams.Enabled[teamType]
-end
-
-function ReplicaSystem:DestroyReplica(player)
-    local replicaData = self.Replicas[player]
-    if replicaData then
-        replicaData.Model:Destroy()
-        self.Replicas[player] = nil
-    end
-end
-
-function ReplicaSystem:Cleanup()
-    for player, replicaData in pairs(self.Replicas) do
-        if not player or not player.Parent then
-            replicaData.Model:Destroy()
-            self.Replicas[player] = nil
-        end
-    end
-end
-
--- ESP Functions
-function ESPLibrary:CreateESP(Player)
-    local teamType = GetPlayerType(Player)
-
-    local box = {
-        TopLeft = Drawing.new("Line"),
-        TopRight = Drawing.new("Line"),
-        BottomLeft = Drawing.new("Line"),
-        BottomRight = Drawing.new("Line"),
-        Left = Drawing.new("Line"),
-        Right = Drawing.new("Line"),
-        Top = Drawing.new("Line"),
-        Bottom = Drawing.new("Line"),
-    }
-
-    for _, line in pairs(box) do
-        line.Visible = false
-        line.Color = self.Settings.currentColors[teamType].Box.Outline.Visible
-        line.Thickness = self.Settings.Box.Thickness
-    end
-
-    local tracer = Drawing.new("Line")
-    tracer.Visible = false
-    tracer.Color = self.Settings.currentColors[teamType].Tracer.Visible
-    tracer.Thickness = self.Settings.Tracer.Thickness
-
-    local healthBar = {
-        Outline = Drawing.new("Square"),
-        Fill = Drawing.new("Square"),
-        Text = Drawing.new("Text"),
-    }
-
-    for _, obj in pairs(healthBar) do
-        obj.Visible = false
-        if obj == healthBar.Fill then
-            obj.Filled = true
-        elseif obj == healthBar.Text then
-            obj.Center = true
-            obj.Size = self.Settings.TextSize
-            obj.Font = 2
-        else
-            obj.Filled = false
-        end
-    end
-
-    local info = {
-        Name = Drawing.new("Text"),
-        Distance = Drawing.new("Text"),
-    }
-
-    for _, text in pairs(info) do
-        text.Visible = false
-        text.Center = true
-        text.Size = self.Settings.TextSize
-        text.Color = self.Settings.currentColors[teamType].Text
-        text.Font = 2
-        text.Outline = true
-    end
-
-    local snapline = Drawing.new("Line")
-    snapline.Visible = false
-    snapline.Color = self.Settings.currentColors[teamType].Box.Outline.Visible
-    snapline.Thickness = 1
-
-    local skeleton = {
-        Head = Drawing.new("Line"),
-        Neck = Drawing.new("Line"),
-        UpperSpine = Drawing.new("Line"),
-        LowerSpine = Drawing.new("Line"),
-        LeftShoulder = Drawing.new("Line"),
-        LeftUpperArm = Drawing.new("Line"),
-        LeftLowerArm = Drawing.new("Line"),
-        LeftHand = Drawing.new("Line"),
-        RightShoulder = Drawing.new("Line"),
-        RightUpperArm = Drawing.new("Line"),
-        RightLowerArm = Drawing.new("Line"),
-        RightHand = Drawing.new("Line"),
-        LeftHip = Drawing.new("Line"),
-        LeftUpperLeg = Drawing.new("Line"),
-        LeftLowerLeg = Drawing.new("Line"),
-        LeftFoot = Drawing.new("Line"),
-        RightHip = Drawing.new("Line"),
-        RightUpperLeg = Drawing.new("Line"),
-        RightLowerLeg = Drawing.new("Line"),
-        RightFoot = Drawing.new("Line"),
-    }
-
-    for _, line in pairs(skeleton) do
-        line.Visible = false
-        line.Color = self.Settings.currentColors[teamType].Skeleton.Visible
-        line.Thickness = self.Settings.Skeleton.Thickness
-        line.Transparency = self.Settings.Skeleton.Transparency
-    end
-
-    self.Drawings.Skeleton[Player] = skeleton
-    self.Drawings.ESP[Player] = {
-        Box = box,
-        Tracer = tracer,
-        HealthBar = healthBar,
-        Info = info,
-        Snapline = snapline,
-    }
-
-    if self.Settings.Chams.Enabled[teamType] then
-        ReplicaSystem:CreateReplica(Player)
-    end
-end
-
-function ESPLibrary:RemoveESP(Player)
-    local esp = self.Drawings.ESP[Player]
-    if esp then
-        for _, obj in pairs(esp.Box) do
-            pcall(obj.Remove, obj)
-        end
-        pcall(esp.Tracer.Remove, esp.Tracer)
-        for _, obj in pairs(esp.HealthBar) do
-            pcall(obj.Remove, obj)
-        end
-        for _, obj in pairs(esp.Info) do
-            pcall(obj.Remove, obj)
-        end
-        pcall(esp.Snapline.Remove, esp.Snapline)
-        self.Drawings.ESP[Player] = nil
-    end
-
-    local skeleton = self.Drawings.Skeleton[Player]
-    if skeleton then
-        for _, line in pairs(skeleton) do
-            pcall(line.Remove, line)
-        end
-        self.Drawings.Skeleton[Player] = nil
-    end
-
-    ReplicaSystem:DestroyReplica(Player)
-end
-
-function ESPLibrary:UpdateESP(player)
-    if not self.Settings.Enabled then return end
-
-    local esp = self.Drawings.ESP[player]
-    if not esp then return end
-
-    local character = player.Character
-    if not character then
-        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-        return
-    end
-
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChild("Humanoid")
-    if not rootPart or not humanoid or humanoid.Health <= 0 then
-        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-        return
-    end
-
-    local _, isOnScreen = Camera:WorldToViewportPoint(rootPart.Position)
-    if not isOnScreen then
-        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-        return
-    end
-
-    local distance = (rootPart.Position - Camera.CFrame.Position).Magnitude
-    if distance > self.Settings.MaxDistance then
-        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-        return
-    end
-
-    local isVisible = true
-    if isOnScreen and self.Settings.Checks.Visible.Enabled then
-        local obscuringParts = Camera:GetPartsObscuringTarget(
-            {Camera.CFrame.Position, rootPart.Position},
-            {character}
-        )
-        isVisible = #obscuringParts == 0
-        if self.Settings.Checks.Visible.OnlyVisible and not isVisible then
-            self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-            return
-        end
-    end
-
-    local teamType = GetPlayerType(player)
-    if self.Settings.Checks.Team.Enabled then
-        if not self.Settings.Checks.Team.SelectedTeams[teamType] then
-            self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
-            return
-        end
-    end
-
-    self:UpdateBoxESP(player, esp, character, rootPart, isVisible, teamType)
-    self:UpdateTracer(player, esp, rootPart, isVisible, teamType)
-    self:UpdateHealthBar(player, esp, humanoid, character, rootPart, isVisible, teamType)
-    self:UpdateInfo(player, esp, rootPart, distance, isVisible, teamType)
-    self:UpdateSkeleton(player, character, isVisible, teamType)
-    self:UpdateChams(player, isVisible, teamType)
-end
-
-function ESPLibrary:HideAllDrawings(esp, skeleton)
-    if esp then
-        for _, obj in pairs(esp.Box) do
-            obj.Visible = false
-        end
-        esp.Tracer.Visible = false
-        for _, obj in pairs(esp.HealthBar) do
-            obj.Visible = false
-        end
-        for _, obj in pairs(esp.Info) do
-            obj.Visible = false
-        end
-        esp.Snapline.Visible = false
-    end
-
-    if skeleton then
-        for _, line in pairs(skeleton) do
-            line.Visible = false
-        end
-    end
-end
-
-function ESPLibrary:UpdateBoxESP(player, esp, character, rootPart, isVisible, teamType)
-    local boxColor = GetPlayerColor(player, isVisible, "Box", "Outline")
-    
-    local size = character:GetExtentsSize()
-    local cf = rootPart.CFrame
-
-    local top = Camera:WorldToViewportPoint(cf * CFrame.new(0, size.Y / 2, 0).Position)
-    local bottom = Camera:WorldToViewportPoint(cf * CFrame.new(0, -size.Y / 2, 0).Position)
-
-    if not top or not bottom or top.Z < 0 or bottom.Z < 0 then
-        for _, obj in pairs(esp.Box) do
-            obj.Visible = false
-        end
-        return
-    end
-
-    local screenSize = bottom.Y - top.Y
-    local boxWidth = screenSize * 0.65
-    local boxPosition = Vector2.new(top.X - boxWidth / 2, top.Y)
-    local boxSize = Vector2.new(boxWidth, screenSize)
-
-    for _, obj in pairs(esp.Box) do
-        obj.Visible = false
-    end
-
-    if self.Settings.Box.Enabled then
-        if self.Settings.Box.Style == 1 then
-            local cornerSize = boxWidth * 0.2
-
-            esp.Box.TopLeft.From = boxPosition
-            esp.Box.TopLeft.To = boxPosition + Vector2.new(cornerSize, 0)
-            esp.Box.TopLeft.Visible = true
-
-            esp.Box.TopRight.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.TopRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, 0)
-            esp.Box.TopRight.Visible = true
-
-            esp.Box.BottomLeft.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.BottomLeft.To = boxPosition + Vector2.new(cornerSize, boxSize.Y)
-            esp.Box.BottomLeft.Visible = true
-
-            esp.Box.BottomRight.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.BottomRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, boxSize.Y)
-            esp.Box.BottomRight.Visible = true
-
-            esp.Box.Left.From = boxPosition
-            esp.Box.Left.To = boxPosition + Vector2.new(0, cornerSize)
-            esp.Box.Left.Visible = true
-
-            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, cornerSize)
-            esp.BBox.Right.Visible = true
-
-            esp.Box.Top.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Top.To = boxPosition + Vector2.new(0, boxSize.Y - cornerSize)
-            esp.Box.Top.Visible = true
-
-            esp.Box.Bottom.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y - cornerSize)
-            esp.Box.Bottom.Visible = true
-        else
-            esp.Box.Left.From = boxPosition
-            esp.Box.Left.To = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Left.Visible = true
-
-            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Right.Visible = true
-
-            esp.Box.Top.From = boxPosition
-            esp.Box.Top.To = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Top.Visible = true
-
-            esp.Box.Bottom.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Bottom.Visible = true
-        end
-
-        for _, obj in pairs(esp.Box) do
-            if obj.Visible then
-                obj.Color = boxColor
-                obj.Thickness = self.Settings.Box.Thickness
-            end
-        end
-    end
-end
-
-function ESPLibrary:UpdateTracer(player, esp, rootPart, isVisible, teamType)
-    if self.Settings.Tracer.Enabled[teamType] then
-        local pos = Camera:WorldToViewportPoint(rootPart.Position)
-        esp.Tracer.From = GetTracerOrigin()
-        esp.Tracer.To = Vector2.new(pos.X, pos.Y)
-        esp.Tracer.Color = GetPlayerColor(player, isVisible, "Tracer")
-        esp.Tracer.Visible = true
-    else
-        esp.Tracer.Visible = false
-    end
-end
-
-function ESPLibrary:UpdateHealthBar(player, esp, humanoid, character, rootPart, isVisible, teamType)
-    if self.Settings.HealthBar.Enabled[teamType] then
-        local health = humanoid.Health
-        local maxHealth = humanoid.MaxHealth
-        local healthPercent = health / maxHealth
-
-        local size = character:GetExtentsSize()
-        local top = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, size.Y / 2, 0).Position)
-        local bottom = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, -size.Y / 2, 0).Position)
-        
-        local screenSize = bottom.Y - top.Y
-        local barHeight = screenSize * 0.8
-        local barWidth = 4
-        local barPos = Vector2.new(top.X - screenSize * 0.65 / 2 - barWidth - 2, top.Y + (screenSize - barHeight) / 2)
-
-        if self.Settings.HealthBar.Bar then
-            esp.HealthBar.Outline.Size = Vector2.new(barWidth, barHeight)
-            esp.HealthBar.Outline.Position = barPos
-            esp.HealthBar.Outline.Visible = true
-            esp.HealthBar.Outline.Color = GetPlayerColor(player, isVisible, "HealthBar", "Outline")
-
-            esp.HealthBar.Fill.Size = Vector2.new(barWidth - 2, barHeight * healthPercent)
-            esp.HealthBar.Fill.Position = Vector2.new(barPos.X + 1, barPos.Y + barHeight * (1 - healthPercent))
-            esp.HealthBar.Fill.Color = GetPlayerColor(player, isVisible, "HealthBar", "Fill")
-            esp.HealthBar.Fill.Visible = true
-        else
-            esp.HealthBar.Outline.Visible = false
-            esp.HealthBar.Fill.Visible = false
-        end
-
-        if self.Settings.HealthBar.Text then
-            esp.HealthBar.Text.Text = math.floor(health) .. self.Settings.HealthBar.Suffix
-            esp.HealthBar.Text.Position = Vector2.new(barPos.X + barWidth + 2, barPos.Y + barHeight / 2)
-            esp.HealthBar.Text.Color = GetPlayerColor(player, isVisible, "HealthBar", "Fill")
-            esp.HealthBar.Text.Visible = true
-        else
-            esp.HealthBar.Text.Visible = false
-        end
-    else
-        for _, obj in pairs(esp.HealthBar) do
-            obj.Visible = false
-        end
-    end
-end
-
-function ESPLibrary:UpdateInfo(player, esp, rootPart, distance, isVisible, teamType)
-    local size = rootPart.Parent:GetExtentsSize()
-    local top = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, size.Y / 2, 0).Position)
-    local bottom = Camera:WorldToViewportPoint(rootPart.CFrame * CFrame.new(0, -size.Y / 2, 0).Position)
-    
-    local screenSize = bottom.Y - top.Y
-    local boxWidth = screenSize * 0.65
-    local boxPosition = Vector2.new(top.X - boxWidth / 2, top.Y)
-
-    if self.Settings.Name.Enabled[teamType] then
-        esp.Info.Name.Text = self.Settings.Name.Style == 2 and player.Name or player.DisplayName
-        esp.Info.Name.Position = Vector2.new(boxPosition.X + boxWidth / 2, boxPosition.Y - 20)
-        esp.Info.Name.Color = GetPlayerColor(player, isVisible, "Text")
-        esp.Info.Name.Visible = true
-    else
-        esp.Info.Name.Visible = false
-    end
-
-    if self.Settings.Distance.Enabled[teamType] then
-        esp.Info.Distance.Text = math.floor(distance) .. "m"
-        esp.Info.Distance.Position = Vector2.new(boxPosition.X + boxWidth / 2, boxPosition.Y + screenSize + 5)
-        esp.Info.Distance.Color = GetPlayerColor(player, isVisible, "Text")
-        esp.Info.Distance.Visible = true
-    else
-        esp.Info.Distance.Visible = false
-    end
-end
-
-function ESPLibrary:UpdateSkeleton(player, character, isVisible, teamType)
-    local skeleton = self.Drawings.Skeleton[player]
-    if not skeleton or not self.Settings.Skeleton.Enabled[teamType] then return end
-
-    local function getBone(boneName)
-        return character:FindFirstChild(boneName) or character:FindFirstChild(boneName:gsub("Upper", ""):gsub("Lower", ""))
-    end
-
-    local bones = {
-        Head = getBone("Head"),
-        UpperTorso = getBone("UpperTorso") or getBone("Torso"),
-        LowerTorso = getBone("LowerTorso"),
-        LeftUpperArm = getBone("LeftUpperArm"),
-        LeftLowerArm = getBone("LeftLowerArm"),
-        LeftHand = getBone("LeftHand"),
-        RightUpperArm = getBone("RightUpperArm"),
-        RightLowerArm = getBone("RightLowerArm"),
-        RightHand = getBone("RightHand"),
-        LeftUpperLeg = getBone("LeftUpperLeg"),
-        LeftLowerLeg = getBone("LeftLowerLeg"),
-        LeftFoot = getBone("LeftFoot"),
-        RightUpperLeg = getBone("RightUpperLeg"),
-        RightLowerLeg = getBone("RightLowerLeg"),
-        RightFoot = getBone("RightFoot"),
-    }
-
-    for _, line in pairs(skeleton) do
-        line.Visible = false
-    end
-
-    local function drawBone(fromBone, toBone, line)
-        if not fromBone or not toBone then return end
-
-        local fromPos = fromBone.Position
-        local toPos = toBone.Position
-
-        local fromScreen, fromVisible = Camera:WorldToViewportPoint(fromPos)
-        local toScreen, toVisible = Camera:WorldToViewportPoint(toPos)
-
-        if fromVisible and toVisible and fromScreen.Z > 0 and toScreen.Z > 0 then
-            line.From = Vector2.new(fromScreen.X, fromScreen.Y)
-            line.To = Vector2.new(toScreen.X, toScreen.Y)
-            line.Color = GetPlayerColor(player, isVisible, "Skeleton")
-            line.Visible = true
-        end
-    end
-
-    drawBone(bones.Head, bones.UpperTorso, skeleton.Head)
-    drawBone(bones.UpperTorso, bones.LowerTorso, skeleton.UpperSpine)
-    
-    drawBone(bones.UpperTorso, bones.LeftUpperArm, skeleton.LeftShoulder)
-    drawBone(bones.LeftUpperArm, bones.LeftLowerArm, skeleton.LeftUpperArm)
-    drawBone(bones.LeftLowerArm, bones.LeftHand, skeleton.LeftLowerArm)
-    
-    drawBone(bones.UpperTorso, bones.RightUpperArm, skeleton.RightShoulder)
-    drawBone(bones.RightUpperArm, bones.RightLowerArm, skeleton.RightUpperArm)
-    drawBone(bones.RightLowerArm, bones.RightHand, skeleton.RightLowerArm)
-    
-    drawBone(bones.LowerTorso, bones.LeftUpperLeg, skeleton.LeftHip)
-    drawBone(bones.LeftUpperLeg, bones.LeftLowerLeg, skeleton.LeftUpperLeg)
-    drawBone(bones.LeftLowerLeg, bones.LeftFoot, skeleton.LeftLowerLeg)
-    
-    drawBone(bones.LowerTorso, bones.RightUpperLeg, skeleton.RightHip)
-    drawBone(bones.RightUpperLeg, bones.RightLowerLeg, skeleton.RightUpperLeg)
-    drawBone(bones.RightLowerLeg, bones.RightFoot, skeleton.RightLowerLeg)
-end
-
-function ESPLibrary:UpdateChams(player, isVisible, teamType)
-    if self.Settings.Chams.Enabled[teamType] then
-        ReplicaSystem:UpdateReplica(player, isVisible)
-    else
-        local replicaData = ReplicaSystem.Replicas[player]
-        if replicaData then
-            replicaData.Highlight.Enabled = false
-        end
-    end
-end
-
--- Main loop and player management
-function ESPLibrary:Start()
-    -- Create ESP for existing players
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            self:CreateESP(player)
-        end
-    end
-
-    -- Handle new players
-    Players.PlayerAdded:Connect(function(player)
-        player.CharacterAdded:Connect(function()
-            wait(1) -- Wait for character to fully load
-            self:CreateESP(player)
-        end)
-        
-        if player.Character then
-            self:CreateESP(player)
-        end
-    end)
-
-    -- Handle player removal
-    Players.PlayerRemoving:Connect(function(player)
-        self:RemoveESP(player)
-    end)
-
-    -- Main update loop
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not self.Settings.Enabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    local esp = self.Drawings.ESP[player]
-                    if esp then
-                        self:HideAllDrawings(esp, self.Drawings.Skeleton[player])
+        -- Per-part lights with face-specific glow
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                -- Primary point light for ambient glow
+                local pointLight = Instance.new("PointLight")
+                pointLight.Name = "X3_ESP_Glow"
+                pointLight.Color = baseColor
+                pointLight.Brightness = ChamsGlowIntensity * 1.8
+                pointLight.Range = 5 + (ChamsGlowIntensity * 4)
+                pointLight.Shadows = false
+                pointLight.Parent = part
+                table.insert(layers.lights, pointLight)
+                
+                -- Surface lights on key faces for directional bleed
+                if partName == "Torso" or partName == "Head" then
+                    for _, face in ipairs({Enum.NormalId.Front, Enum.NormalId.Back}) do
+                        local surfLight = Instance.new("SurfaceLight")
+                        surfLight.Name = "X3_ESP_Surface"
+                        surfLight.Color = baseColor
+                        surfLight.Brightness = ChamsGlowIntensity * 0.8
+                        surfLight.Range = 3
+                        surfLight.Angle = 120
+                        surfLight.Face = face
+                        surfLight.Shadows = false
+                        surfLight.Parent = part
+                        table.insert(layers.lights, surfLight)
                     end
                 end
+                
+                -- Glow shell: slightly oversized neon clone for volumetric feel
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_Shell"
+                shell.Size = part.Size * 1.06
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Color = baseColor
+                shell.Transparency = 0.88
+                shell.CanCollide = false
+                shell.CanQuery = false
+                shell.CanTouch = false
+                shell.Massless = true
+                shell.Anchored = false
+                shell.CastShadow = false
+                shell.Parent = character
+                
+                -- Copy mesh for Head
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25 * 1.06, 1.25 * 1.06, 1.25 * 1.06)
+                end
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part
+                weld.Part1 = shell
+                weld.Parent = shell
+                
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
             end
-            return
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        -- Subtle organic breathing on the inner highlight
+        local breathe = 0.5 + 0.5 * math.sin(t * 1.2 + StableHash(player, 0) * TAU)
+        local fbmVal = FBM(t * 0.3, StableHash(player, 99) * 10, 3, 2.0, 0.5)
+        local combinedPulse = breathe * 0.7 + (fbmVal * 0.5 + 0.5) * 0.3
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                hl.FillColor = baseColor
+                hl.OutlineColor = baseColor
+                hl.FillTransparency = 0.78 + combinedPulse * 0.08
+                hl.OutlineTransparency = math.clamp(0.05 + (1 - combinedPulse) * 0.15, 0, 0.4)
+            end
+        end
+        
+        for i, light in ipairs(layers.lights) do
+            if light and light.Parent then
+                light.Color = baseColor
+                local lPulse = 0.5 + 0.5 * math.sin(t * 1.5 + i * PHI)
+                light.Brightness = ChamsGlowIntensity * (1.2 + lPulse * 0.6)
+            end
+        end
+        
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            if shell and shell.Parent and source and source.Parent then
+                shell.Color = baseColor
+                -- Shells breathe in size subtly
+                local sBreath = 1.04 + math.sin(t * 1.8 + (PartSpatialIndex[shellData.partName] or {index=0}).index * PHI) * 0.025
+                shell.Size = source.Size * sBreath
+                shell.Transparency = 0.85 + (1 - combinedPulse) * 0.08
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 2: THERMAL VISION
+-- Heat-map style rendering with temperature gradient and heat shimmer
+-- ============================================
+ESPModes["Thermal"] = {
+    Name = "Thermal",
+    Description = "Heat-signature vision with temperature gradient based on health and distance",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
+        
+        -- Thermal uses a specific color palette regardless of settings
+        -- Hot (high health/close) = white -> yellow -> orange -> red
+        -- Cold (low health/far) = red -> purple -> dark blue -> black
+        
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Thermal"
+        hl.Adornee = character
+        hl.FillColor = Color3.fromRGB(255, 200, 50) -- warm default
+        hl.FillTransparency = 0.3
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.OutlineTransparency = 0.5
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        -- Per-part heat shells with temperature variation
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                -- Heat glow (different intensity per body part)
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Heat"
+                light.Brightness = 2
+                light.Range = 6
+                light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                -- Thermal shell with part-specific heat variance
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_ThermalShell"
+                shell.Size = part.Size * 1.03
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Transparency = 0.7
+                shell.CanCollide = false
+                shell.CanQuery = false
+                shell.CanTouch = false
+                shell.Massless = true
+                shell.Anchored = false
+                shell.CastShadow = false
+                shell.Parent = character
+                
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25 * 1.04, 1.25 * 1.04, 1.25 * 1.04)
+                end
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        local hp = 1
+        if player.Character then
+            local hum = player.Character:FindFirstChild("Humanoid")
+            if hum then hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1) end
+        end
+        
+        -- Distance factor (closer = hotter)
+        local distFactor = 1
+        local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local targetRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if localRoot and targetRoot then
+            local dist = (localRoot.Position - targetRoot.Position).Magnitude
+            distFactor = math.clamp(1 - (dist / 150), 0.1, 1)
+        end
+        
+        -- Combined heat value
+        local heat = hp * 0.6 + distFactor * 0.4
+        
+        -- Thermal palette mapping (0=cold/dark -> 1=hot/white)
+        -- Black -> Dark Blue -> Purple -> Red -> Orange -> Yellow -> White
+        local thermalColor
+        if heat < 0.15 then
+            thermalColor = LerpColor3(Color3.fromRGB(10, 0, 30), Color3.fromRGB(30, 0, 100), heat / 0.15)
+        elseif heat < 0.3 then
+            thermalColor = LerpColor3(Color3.fromRGB(30, 0, 100), Color3.fromRGB(140, 0, 120), (heat - 0.15) / 0.15)
+        elseif heat < 0.5 then
+            thermalColor = LerpColor3(Color3.fromRGB(140, 0, 120), Color3.fromRGB(220, 30, 0), (heat - 0.3) / 0.2)
+        elseif heat < 0.7 then
+            thermalColor = LerpColor3(Color3.fromRGB(220, 30, 0), Color3.fromRGB(255, 160, 0), (heat - 0.5) / 0.2)
+        elseif heat < 0.85 then
+            thermalColor = LerpColor3(Color3.fromRGB(255, 160, 0), Color3.fromRGB(255, 240, 100), (heat - 0.7) / 0.15)
+        else
+            thermalColor = LerpColor3(Color3.fromRGB(255, 240, 100), Color3.fromRGB(255, 255, 240), (heat - 0.85) / 0.15)
+        end
+        
+        -- Heat shimmer: noise-driven perturbation
+        local shimmerX = FBM(t * 2.5, StableHash(player, 7) * 100, 3) * 0.08
+        local shimmerH, shimmerS, shimmerV = ToHSV(thermalColor)
+        thermalColor = FromHSV(shimmerH + shimmerX, shimmerS, shimmerV)
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                hl.FillColor = thermalColor
+                hl.FillTransparency = 0.25 + (1 - heat) * 0.35
+                hl.OutlineColor = heat > 0.6 and Color3.fromRGB(255, 255, 220) or thermalColor
+                hl.OutlineTransparency = 0.3 + (1 - heat) * 0.4
+            end
+        end
+        
+        -- Per-part heat variation: extremities are cooler, torso/head are hotter
+        local partHeatBias = {
+            ["Head"] = 0.15, ["Torso"] = 0.1,
+            ["Left Arm"] = -0.05, ["Right Arm"] = -0.05,
+            ["Left Leg"] = -0.12, ["Right Leg"] = -0.12,
+        }
+        
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                local partHeat = math.clamp(heat + (partHeatBias[pn] or 0), 0, 1)
+                -- Remap heat to thermal color for this specific part
+                local pH
+                if partHeat > 0.5 then
+                    pH = LerpColor3(Color3.fromRGB(220, 60, 0), Color3.fromRGB(255, 240, 120), (partHeat - 0.5) / 0.5)
+                else
+                    pH = LerpColor3(Color3.fromRGB(40, 0, 80), Color3.fromRGB(220, 60, 0), partHeat / 0.5)
+                end
+                light.Color = pH
+                light.Brightness = 1 + partHeat * 3
+                light.Range = 3 + partHeat * 5
+            end
+        end
+        
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local partHeat = math.clamp(heat + (partHeatBias[pn] or 0), 0, 1)
+                -- Individual noise per shell for shimmer effect
+                local noiseVal = Perlin2D(t * 3 + (PartSpatialIndex[pn] or {index=0}).index * 3.7, StableHash(player, 20) * 50)
+                local shimmer = partHeat + noiseVal * 0.08
+                
+                local sColor
+                if shimmer > 0.5 then
+                    sColor = LerpColor3(Color3.fromRGB(200, 40, 0), Color3.fromRGB(255, 230, 80), (shimmer - 0.5) / 0.5)
+                else
+                    sColor = LerpColor3(Color3.fromRGB(30, 0, 70), Color3.fromRGB(200, 40, 0), shimmer / 0.5)
+                end
+                shell.Color = sColor
+                shell.Transparency = 0.65 + (1 - partHeat) * 0.25
+                -- Heat makes shells expand slightly (thermal blooming)
+                shell.Size = source.Size * (1.02 + partHeat * 0.04 + math.abs(noiseVal) * 0.015)
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 3: PLASMA FIELD
+-- Interference-pattern driven dual-sine color fields
+-- ============================================
+ESPModes["Plasma"] = {
+    Name = "Plasma",
+    Description = "Interference-pattern plasma with overlapping wave fields",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
+        
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Plasma"
+        hl.Adornee = character
+        hl.FillTransparency = 0.55
+        hl.OutlineTransparency = 0.1
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Plasma"
+                light.Brightness = 2.5; light.Range = 8; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_PlasmaShell"
+                shell.Size = part.Size * 1.08
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Transparency = 0.75
+                shell.CanCollide = false; shell.CanQuery = false; shell.CanTouch = false
+                shell.Massless = true; shell.Anchored = false; shell.CastShadow = false
+                shell.Parent = character
+                
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25 * 1.08, 1.25 * 1.08, 1.25 * 1.08)
+                end
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        local seed = StableHash(player, 42)
+        
+        -- Classic plasma: sum of 2D sine fields at different angles/frequencies
+        -- But here we use each part's spatial position as the 2D coordinate
+        -- so the pattern flows across the body
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                -- Global highlight gets the torso's plasma value
+                local px, py = 0, 0 -- torso is at center
+                local v1 = math.sin(px * 2.0 + t * 1.3)
+                local v2 = math.sin(py * 2.5 + t * 0.9)
+                local v3 = math.sin((px + py + t) * 1.5)
+                local v4 = math.sin(math.sqrt(px * px + py * py + 1) * 2.0 + t)
+                local plasma = (v1 + v2 + v3 + v4) / 4 -- [-1, 1]
+                local hue = ((plasma + 1) / 2 + t * 0.05 + seed) % 1
+                local plasmaColor = FromHSV(hue, 0.85, 0.95)
+                hl.FillColor = plasmaColor
+                hl.OutlineColor = FromHSV((hue + 0.5) % 1, 0.9, 1)
+                hl.FillTransparency = 0.5 + math.abs(plasma) * 0.15
+            end
+        end
+        
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                local si = PartSpatialIndex[pn] or {x = 0, y = 0, index = 0}
+                local px, py = si.x, si.y
+                
+                local v1 = math.sin(px * 2.0 + t * 1.3)
+                local v2 = math.sin(py * 2.5 + t * 0.9)
+                local v3 = math.sin((px + py + t) * 1.5)
+                local v4 = math.sin(math.sqrt(px * px + py * py + 1) * 2.0 + t)
+                local plasma = (v1 + v2 + v3 + v4) / 4
+                local hue = ((plasma + 1) / 2 + t * 0.05 + seed) % 1
+                
+                light.Color = FromHSV(hue, 0.9, 1)
+                light.Brightness = 2 + math.abs(plasma) * 2.5
+                light.Range = 5 + math.abs(plasma) * 6
+            end
+        end
+        
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {x = 0, y = 0, index = 0}
+                local px, py = si.x, si.y
+                
+                local v1 = math.sin(px * 2.0 + t * 1.3)
+                local v2 = math.sin(py * 2.5 + t * 0.9)
+                local v3 = math.sin((px + py + t) * 1.5)
+                local v4 = math.sin(math.sqrt(px * px + py * py + 1) * 2.0 + t)
+                local plasma = (v1 + v2 + v3 + v4) / 4
+                local hue = ((plasma + 1) / 2 + t * 0.05 + seed + 0.15) % 1
+                
+                shell.Color = FromHSV(hue, 0.95, 1)
+                shell.Transparency = 0.7 + (1 - math.abs(plasma)) * 0.15
+                -- Plasma makes shells throb
+                local throb = 1.06 + math.abs(plasma) * 0.04
+                shell.Size = source.Size * throb
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 4: SPECTRAL CHROMATIC
+-- Chromatic dispersion effect - each body part has a slightly different
+-- hue velocity creating a prismatic separation
+-- ============================================
+ESPModes["Spectral"] = {
+    Name = "Spectral",
+    Description = "Prismatic chromatic dispersion with per-part wavelength separation",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}, secondShells = {}}
+        
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Spectral"
+        hl.Adornee = character
+        hl.FillTransparency = 0.7
+        hl.OutlineTransparency = 0.0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Spectral"
+                light.Brightness = 2; light.Range = 6; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                -- Primary shell (main wavelength)
+                local shell1 = Instance.new("Part")
+                shell1.Name = "X3_ESP_SpectralShell1"
+                shell1.Size = part.Size * 1.05
+                shell1.CFrame = part.CFrame
+                shell1.Material = Enum.Material.Neon
+                shell1.Transparency = 0.82
+                shell1.CanCollide = false; shell1.CanQuery = false; shell1.CanTouch = false
+                shell1.Massless = true; shell1.Anchored = false; shell1.CastShadow = false
+                shell1.Parent = character
+                
+                -- Secondary shell (shifted wavelength) - creates chromatic aberration look
+                local shell2 = Instance.new("Part")
+                shell2.Name = "X3_ESP_SpectralShell2"
+                shell2.Size = part.Size * 1.10
+                shell2.CFrame = part.CFrame
+                shell2.Material = Enum.Material.ForceField
+                shell2.Transparency = 0.9
+                shell2.CanCollide = false; shell2.CanQuery = false; shell2.CanTouch = false
+                shell2.Massless = true; shell2.Anchored = false; shell2.CastShadow = false
+                shell2.Parent = character
+                
+                if partName == "Head" then
+                    local m1 = Instance.new("SpecialMesh", shell1)
+                    m1.MeshType = Enum.MeshType.Head; m1.Scale = Vector3.new(1.25*1.05,1.25*1.05,1.25*1.05)
+                    local m2 = Instance.new("SpecialMesh", shell2)
+                    m2.MeshType = Enum.MeshType.Head; m2.Scale = Vector3.new(1.25*1.10,1.25*1.10,1.25*1.10)
+                end
+                
+                local w1 = Instance.new("WeldConstraint"); w1.Part0 = part; w1.Part1 = shell1; w1.Parent = shell1
+                local w2 = Instance.new("WeldConstraint"); w2.Part0 = part; w2.Part1 = shell2; w2.Parent = shell2
+                
+                table.insert(layers.shells, {part = shell1, source = part, partName = partName})
+                table.insert(layers.secondShells, {part = shell2, source = part, partName = partName})
+                table.insert(layers.welds, w1)
+                table.insert(layers.welds, w2)
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        local seed = StableHash(player, 13)
+        
+        -- Base hue rotates slowly
+        local baseHue = (t * 0.08 + seed) % 1
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                -- Highlight shows the "average" spectral color
+                local avgHue = (baseHue + 0.0) % 1
+                hl.FillColor = FromHSV(avgHue, 0.7, 0.95)
+                hl.OutlineColor = FromHSV((avgHue + 0.5) % 1, 0.8, 1)
+                -- Subtle transparency oscillation
+                local breath = 0.5 + 0.5 * math.sin(t * 0.8)
+                hl.FillTransparency = 0.65 + breath * 0.1
+            end
+        end
+        
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                -- Each part gets a hue offset based on position (prismatic spread)
+                local prismOffset = si.index * 0.12
+                local partHue = (baseHue + prismOffset) % 1
+                -- Add noise wobble to the hue
+                local noiseWobble = Perlin2D(t * 0.5, si.index * PHI * 10) * 0.04
+                light.Color = FromHSV((partHue + noiseWobble) % 1, 0.9, 1)
+                light.Brightness = 1.5 + math.sin(t * 2 + si.index * PHI) * 0.8
+                light.Range = 5 + math.sin(t * 1.3 + si.index * 1.7) * 2
+            end
+        end
+        
+        -- Primary shells: main spectral color per part
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                local prismOffset = si.index * 0.12
+                local partHue = (baseHue + prismOffset) % 1
+                shell.Color = FromHSV(partHue, 0.95, 1)
+                
+                -- Chromatic breathing
+                local breath = math.sin(t * 1.5 + si.index * PHI * TAU)
+                shell.Transparency = 0.78 + breath * 0.06
+                shell.Size = source.Size * (1.04 + breath * 0.015)
+            end
+        end
+        
+        -- Secondary shells: complementary/shifted wavelength
+        for _, shellData in ipairs(layers.secondShells or {}) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                local prismOffset = si.index * 0.12
+                -- Shift by ~120 degrees for triadic chromatic split
+                local partHue = (baseHue + prismOffset + 0.33) % 1
+                shell.Color = FromHSV(partHue, 0.8, 0.9)
+                
+                local wave = math.sin(t * 0.9 + si.index * PHI * 2.3)
+                shell.Transparency = 0.87 + wave * 0.05
+                shell.Size = source.Size * (1.08 + wave * 0.02)
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 5: GLITCH / CYBERPUNK
+-- Random per-part flicker with scan-line and digital corruption aesthetics
+-- ============================================
+ESPModes["Glitch"] = {
+    Name = "Glitch",
+    Description = "Digital corruption with random per-part flicker, scan lines, and data-moshing",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}, glitchState = {}}
+        
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Glitch"
+        hl.Adornee = character
+        hl.FillColor = Color3.fromRGB(0, 255, 180)
+        hl.FillTransparency = 0.6
+        hl.OutlineColor = Color3.fromRGB(255, 0, 100)
+        hl.OutlineTransparency = 0.0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Glitch"
+                light.Color = Color3.fromRGB(0, 255, 180)
+                light.Brightness = 2; light.Range = 5; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_GlitchShell"
+                shell.Size = part.Size * 1.04
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Transparency = 0.85
+                shell.CanCollide = false; shell.CanQuery = false; shell.CanTouch = false
+                shell.Massless = true; shell.Anchored = false; shell.CastShadow = false
+                shell.Parent = character
+                
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25*1.04,1.25*1.04,1.25*1.04)
+                end
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+                
+                -- Per-part glitch state
+                layers.glitchState[partName] = {
+                    flickerTimer = 0,
+                    flickerDuration = 0,
+                    isFlickering = false,
+                    offsetColor = Color3.new(0, 1, 0.7),
+                    scanPhase = math.random() * TAU,
+                }
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        -- Glitch palette: cyberpunk neon
+        local glitchColors = {
+            Color3.fromRGB(0, 255, 180),   -- cyan-green
+            Color3.fromRGB(255, 0, 100),   -- hot pink
+            Color3.fromRGB(120, 0, 255),   -- purple
+            Color3.fromRGB(255, 255, 0),   -- yellow
+            Color3.fromRGB(0, 150, 255),   -- blue
+            Color3.fromRGB(255, 80, 0),    -- orange
+        }
+        
+        -- Global scan line effect (moves up the body)
+        local scanY = math.sin(t * 3.5) * 3 -- oscillates between -3 and 3 (body range)
+        local scanWidth = 0.8
+        
+        -- Major glitch events (whole-body flicker)
+        local majorGlitch = PoissonEvent("glitch_major_" .. player.UserId, 0.8, dt)
+        
+        if majorGlitch then
+            local gc = glitchColors[math.random(1, #glitchColors)]
+            for _, hl in ipairs(layers.highlights) do
+                if hl and hl.Parent then
+                    hl.FillColor = gc
+                    hl.OutlineColor = glitchColors[math.random(1, #glitchColors)]
+                    hl.FillTransparency = 0.2 + math.random() * 0.3
+                end
+            end
+        else
+            -- Normal state: subtle base color
+            local baseGlitch = Color3.fromRGB(0, 255, 180)
+            for _, hl in ipairs(layers.highlights) do
+                if hl and hl.Parent then
+                    -- Slowly lerp back to base
+                    hl.FillColor = LerpColor3(hl.FillColor, baseGlitch, dt * 5)
+                    hl.OutlineColor = LerpColor3(hl.OutlineColor, Color3.fromRGB(255, 0, 100), dt * 5)
+                    hl.FillTransparency = hl.FillTransparency + (0.6 - hl.FillTransparency) * dt * 8
+                end
+            end
+        end
+        
+        -- Per-part effects
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                local gs = layers.glitchState[pn]
+                if not gs then continue end
+                
+                local si = PartSpatialIndex[pn] or {x = 0, y = 0, index = 0}
+                
+                -- Scan line proximity
+                local scanDist = math.abs(si.y - scanY)
+                local scanInfluence = math.clamp(1 - scanDist / scanWidth, 0, 1)
+                
+                -- Per-part micro-glitch (Poisson events)
+                local partGlitch = PoissonEvent("glitch_" .. player.UserId .. "_" .. pn, 2.5, dt)
+                
+                if partGlitch then
+                    light.Color = glitchColors[math.random(1, #glitchColors)]
+                    light.Brightness = 4 + math.random() * 4
+                    light.Range = 8 + math.random() * 8
+                else
+                    -- Scan line drives brightness
+                    light.Color = LerpColor3(light.Color, Color3.fromRGB(0, 255, 180), dt * 6)
+                    light.Brightness = 1.5 + scanInfluence * 3
+                    light.Range = 4 + scanInfluence * 5
+                end
+            end
+        end
+        
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {x = 0, y = 0, index = 0}
+                local scanDist = math.abs(si.y - scanY)
+                local scanInfluence = math.clamp(1 - scanDist / scanWidth, 0, 1)
+                
+                local partGlitch = PoissonEvent("glitch_shell_" .. player.UserId .. "_" .. pn, 1.5, dt)
+                
+                if partGlitch then
+                    shell.Color = glitchColors[math.random(1, #glitchColors)]
+                    shell.Transparency = 0.4 + math.random() * 0.3
+                    -- Glitch can make shell jump in size
+                    shell.Size = source.Size * (1.0 + math.random() * 0.15)
+                else
+                    shell.Color = LerpColor3(shell.Color, Color3.fromRGB(0, 255, 180), dt * 4)
+                    shell.Transparency = 0.82 - scanInfluence * 0.2
+                    shell.Size = source.Size * (1.03 + scanInfluence * 0.04)
+                end
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 6: HEARTBEAT / CARDIAC
+-- Asymmetric cardiac waveform with systolic/diastolic peaks
+-- ============================================
+ESPModes["Heartbeat"] = {
+    Name = "Heartbeat",
+    Description = "Organic cardiac waveform that pulses like a real heartbeat, tempo tied to health",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
+        
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Heartbeat"
+        hl.Adornee = character
+        hl.FillTransparency = 0.7
+        hl.OutlineTransparency = 0.1
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Heartbeat"
+                light.Brightness = 2; light.Range = 6; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_HeartShell"
+                shell.Size = part.Size * 1.05
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Transparency = 0.85
+                shell.CanCollide = false; shell.CanQuery = false; shell.CanTouch = false
+                shell.Massless = true; shell.Anchored = false; shell.CastShadow = false
+                shell.Parent = character
+                
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25*1.05,1.25*1.05,1.25*1.05)
+                end
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        -- BPM tied to health: low health = fast panicked heartbeat
+        local hp = 1
+        if player.Character then
+            local hum = player.Character:FindFirstChild("Humanoid")
+            if hum then hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1) end
+        end
+        local bpm = 60 + (1 - hp) * 120 -- 60 bpm at full health, 180 bpm at near-death
+        local beat = HeartbeatWave(t, bpm)
+        
+        -- Color shifts with health: healthy = warm red, dying = cold blue-white
+        local healthColor
+        if hp > 0.5 then
+            healthColor = LerpColor3(Color3.fromRGB(220, 40, 40), Color3.fromRGB(180, 0, 0), (1 - hp) * 2)
+        else
+            healthColor = LerpColor3(Color3.fromRGB(180, 0, 0), Color3.fromRGB(100, 120, 200), (0.5 - hp) * 2)
+        end
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                hl.FillColor = healthColor
+                hl.OutlineColor = LerpColor3(healthColor, Color3.new(1, 1, 1), beat * 0.5)
+                hl.FillTransparency = 0.65 - beat * 0.25
+                hl.OutlineTransparency = 0.3 - beat * 0.25
+            end
+        end
+        
+        -- Cardiac propagation: the pulse travels from torso outward
+        -- Parts further from torso get a delayed beat
+        local propagationDelay = {
+            ["Torso"] = 0,
+            ["Head"] = 0.06,
+            ["Left Arm"] = 0.08,
+            ["Right Arm"] = 0.08,
+            ["Left Leg"] = 0.12,
+            ["Right Leg"] = 0.12,
+        }
+        
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                local delay = propagationDelay[pn] or 0
+                local delayedBeat = HeartbeatWave(t - delay, bpm)
+                
+                light.Color = LerpColor3(healthColor, Color3.new(1, 0.9, 0.9), delayedBeat * 0.4)
+                light.Brightness = 1 + delayedBeat * 4
+                light.Range = 3 + delayedBeat * 8
+            end
+        end
+        
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local delay = propagationDelay[pn] or 0
+                local delayedBeat = HeartbeatWave(t - delay, bpm)
+                
+                shell.Color = LerpColor3(healthColor, Color3.new(1, 0.8, 0.8), delayedBeat * 0.3)
+                shell.Transparency = 0.85 - delayedBeat * 0.3
+                -- Shells expand on each beat
+                shell.Size = source.Size * (1.03 + delayedBeat * 0.06)
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 7: VOID / DARK MATTER
+-- Inverse glow effect - darkens surroundings, light-absorbing shells
+-- ============================================
+ESPModes["Void"] = {
+    Name = "Void",
+    Description = "Dark matter effect with light-absorbing shells and gravitational distortion",
+    
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}, secondShells = {}}
+        
+        -- Inner highlight: very dark with bright edge
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Void"
+        hl.Adornee = character
+        hl.FillColor = Color3.fromRGB(5, 0, 15)
+        hl.FillTransparency = 0.15  -- almost opaque dark fill
+        hl.OutlineColor = Color3.fromRGB(100, 0, 200)
+        hl.OutlineTransparency = 0.0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+        
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                -- Negative lights don't exist, but we can use very dim purple
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Void"
+                light.Color = Color3.fromRGB(40, 0, 80)
+                light.Brightness = 0.5; light.Range = 8; light.Shadows = true
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+                
+                -- Dark inner shell (absorbs light visually)
+                local shell1 = Instance.new("Part")
+                shell1.Name = "X3_ESP_VoidShell"
+                shell1.Size = part.Size * 1.06
+                shell1.CFrame = part.CFrame
+                shell1.Material = Enum.Material.SmoothPlastic
+                shell1.Color = Color3.fromRGB(5, 0, 10)
+                shell1.Transparency = 0.3
+                shell1.CanCollide = false; shell1.CanQuery = false; shell1.CanTouch = false
+                shell1.Massless = true; shell1.Anchored = false; shell1.CastShadow = false
+                shell1.Parent = character
+                
+                -- Outer wispy shell (purple energy corona)
+                local shell2 = Instance.new("Part")
+                shell2.Name = "X3_ESP_VoidCorona"
+                shell2.Size = part.Size * 1.15
+                shell2.CFrame = part.CFrame
+                shell2.Material = Enum.Material.Neon
+                shell2.Color = Color3.fromRGB(80, 0, 180)
+                shell2.Transparency = 0.88
+                shell2.CanCollide = false; shell2.CanQuery = false; shell2.CanTouch = false
+                shell2.Massless = true; shell2.Anchored = false; shell2.CastShadow = false
+                shell2.Parent = character
+                
+                if partName == "Head" then
+                    local m1 = Instance.new("SpecialMesh", shell1)
+                    m1.MeshType = Enum.MeshType.Head; m1.Scale = Vector3.new(1.25*1.06,1.25*1.06,1.25*1.06)
+                    local m2 = Instance.new("SpecialMesh", shell2)
+                    m2.MeshType = Enum.MeshType.Head; m2.Scale = Vector3.new(1.25*1.15,1.25*1.15,1.25*1.15)
+                end
+                
+                local w1 = Instance.new("WeldConstraint"); w1.Part0 = part; w1.Part1 = shell1; w1.Parent = shell1
+                local w2 = Instance.new("WeldConstraint"); w2.Part0 = part; w2.Part1 = shell2; w2.Parent = shell2
+                
+                table.insert(layers.shells, {part = shell1, source = part, partName = partName})
+                table.insert(layers.secondShells, {part = shell2, source = part, partName = partName})
+                table.insert(layers.welds, w1)
+                table.insert(layers.welds, w2)
+                
+                -- Dark particle effect (wisps being pulled inward)
+                local voidParticles = Instance.new("ParticleEmitter")
+                voidParticles.Name = "X3_ESP_VoidWisp"
+                voidParticles.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 0, 120)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 0, 50)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0)),
+                })
+                voidParticles.Size = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.4),
+                    NumberSequenceKeypoint.new(0.5, 0.2),
+                    NumberSequenceKeypoint.new(1, 0),
+                })
+                voidParticles.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.3),
+                    NumberSequenceKeypoint.new(0.7, 0.6),
+                    NumberSequenceKeypoint.new(1, 1),
+                })
+                voidParticles.Rate = 8
+                voidParticles.Speed = NumberRange.new(-2, -0.5) -- negative: pulls inward
+                voidParticles.Lifetime = NumberRange.new(0.5, 1.2)
+                voidParticles.SpreadAngle = Vector2.new(360, 360)
+                voidParticles.LightEmission = 0.3
+                voidParticles.LightInfluence = 0
+                voidParticles.Drag = 5
+                voidParticles.Parent = part
+                table.insert(layers.lights, {particle = voidParticles, partName = partName})
+            end
+        end
+        
+        return layers
+    end,
+    
+    Update = function(player, layers, baseColor, dt, t)
+        local seed = StableHash(player, 77)
+        
+        -- Void ripple: concentric waves expanding from center
+        local ripplePhase = t * 1.5
+        local voidPulse = 0.5 + 0.5 * math.sin(t * 0.7 + seed * TAU)
+        
+        -- The void "breathes" with FBM noise
+        local voidBreath = FBM(t * 0.4, seed * 50, 4, 2.0, 0.5) * 0.5 + 0.5
+        
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                -- Dark fill with subtle purple shift
+                local purpleShift = math.sin(t * 0.5) * 0.02
+                hl.FillColor = Color3.fromRGB(
+                    math.clamp(5 + purpleShift * 255, 0, 20),
+                    0,
+                    math.clamp(15 + voidBreath * 20, 0, 40)
+                )
+                hl.FillTransparency = 0.12 + voidBreath * 0.08
+                -- Outline color shifts between purple and deep blue
+                local outH = 0.75 + math.sin(t * 0.3) * 0.05
+                hl.OutlineColor = FromHSV(outH, 0.9, 0.5 + voidPulse * 0.3)
+                hl.OutlineTransparency = 0.05 + (1 - voidPulse) * 0.15
+            end
+        end
+        
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local particle = lightData.particle
+            local pn = lightData.partName
+            
+            if light and light.Parent then
+                local si = PartSpatialIndex[pn] or {x = 0, y = 0, index = 0}
+                -- Ripple: distance from center affects timing
+                local distFromCenter = math.sqrt(si.x * si.x + si.y * si.y)
+                local ripple = math.sin(ripplePhase - distFromCenter * 1.5) * 0.5 + 0.5
+                
+                light.Color = FromHSV(0.75 + ripple * 0.08, 0.9, 0.2 + ripple * 0.3)
+                light.Brightness = 0.3 + ripple * 0.8
+                light.Range = 5 + voidBreath * 4
+            end
+            
+            if particle and particle.Parent then
+                -- Void wisps intensify with the pulse
+                particle.Rate = 5 + voidPulse * 10
+            end
+        end
+        
+        -- Dark inner shells
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                local noise = Perlin2D(t * 0.8, si.index * PHI * 20) * 0.5 + 0.5
+                shell.Color = Color3.fromRGB(5 + noise * 10, 0, 10 + noise * 15)
+                shell.Transparency = 0.25 + noise * 0.15
+                shell.Size = source.Size * (1.04 + voidBreath * 0.03)
+            end
+        end
+        
+        -- Corona shells
+        for _, shellData in ipairs(layers.secondShells or {}) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                local distFromCenter = math.sqrt((PartSpatialIndex[pn] or {x=0}).x^2 + (PartSpatialIndex[pn] or {y=0}).y^2)
+                local ripple = math.sin(ripplePhase - distFromCenter * 1.5) * 0.5 + 0.5
+                
+                shell.Color = FromHSV(0.75 + ripple * 0.1, 0.8, 0.4 + ripple * 0.4)
+                shell.Transparency = 0.82 - ripple * 0.15
+                -- Corona expands and contracts with the void breathing
+                shell.Size = source.Size * (1.12 + voidBreath * 0.06 + ripple * 0.03)
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 8: CASCADE
+-- Sequential activation traveling through body with afterglow trails
+-- ============================================
+ESPModes["Cascade"] = {
+    Name = "Cascade",
+    Description = "Sequential wave of light that cascades through body parts with persistent afterglow",
+
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
+
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Cascade"
+        hl.Adornee = character
+        hl.FillTransparency = 0.75
+        hl.OutlineTransparency = 0.2
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Cascade"
+                light.Brightness = 0.5; light.Range = 3; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_CascadeShell"
+                shell.Size = part.Size * 1.05
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Transparency = 0.9
+                shell.CanCollide = false; shell.CanQuery = false; shell.CanTouch = false
+                shell.Massless = true; shell.Anchored = false; shell.CastShadow = false
+                shell.Parent = character
+
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25*1.05,1.25*1.05,1.25*1.05)
+                end
+
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+            end
         end
 
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                self:UpdateESP(player)
+        return layers
+    end,
+
+    Update = function(player, layers, baseColor, dt, t)
+        -- Cascade path: defines the order the light travels
+        local cascadePath = {"Left Leg", "Right Leg", "Torso", "Left Arm", "Right Arm", "Head"}
+        local totalParts = #cascadePath
+        local cascadeSpeed = 1.2 -- full cycles per second
+        local trailLength = 0.4 -- how long the afterglow persists (0-1 of cycle)
+
+        local cyclePhase = (t * cascadeSpeed) % 1 -- 0 to 1
+
+        -- The "active" position travels through 0 to totalParts
+        local activePos = cyclePhase * totalParts
+
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                hl.FillColor = baseColor
+                hl.OutlineColor = baseColor
+                -- Overall glow follows the cascade
+                local maxIntensity = 0
+                for i = 1, totalParts do
+                    local dist = math.abs(activePos - (i - 0.5))
+                    dist = math.min(dist, totalParts - dist) -- wrap around
+                    local intensity = math.clamp(1 - dist / (totalParts * trailLength), 0, 1)
+                    maxIntensity = math.max(maxIntensity, intensity)
+                end
+                hl.FillTransparency = 0.8 - maxIntensity * 0.25
+                hl.OutlineTransparency = 0.3 - maxIntensity * 0.25
+            end
+        end
+
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local pn = lightData.partName
+            if light and light.Parent then
+                -- Find this part's index in the cascade path
+                local partIdx = 0
+                for i, name in ipairs(cascadePath) do
+                    if name == pn then partIdx = i - 0.5; break end
+                end
+
+                -- Distance from the active position (with wrapping)
+                local dist = math.abs(activePos - partIdx)
+                dist = math.min(dist, totalParts - dist)
+                local intensity = math.clamp(1 - dist / (totalParts * trailLength), 0, 1)
+                -- Smooth the intensity curve
+                intensity = intensity * intensity * (3 - 2 * intensity) -- smoothstep
+
+                -- Color shifts along the trail (leading edge is bright white, trail fades to base)
+                local trailPos = math.clamp((activePos - partIdx) / (totalParts * trailLength), -1, 1)
+                if trailPos < 0 then trailPos = trailPos + totalParts end
+                local leadColor = LerpColor3(baseColor, Color3.new(1, 1, 1), math.clamp(1 - math.abs(trailPos) * 2, 0, 0.6))
+
+                light.Color = leadColor
+                light.Brightness = intensity * 5
+                light.Range = 3 + intensity * 10
+            end
+        end
+
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local partIdx = 0
+                for i, name in ipairs(cascadePath) do
+                    if name == pn then partIdx = i - 0.5; break end
+                end
+
+                local dist = math.abs(activePos - partIdx)
+                dist = math.min(dist, totalParts - dist)
+                local intensity = math.clamp(1 - dist / (totalParts * trailLength), 0, 1)
+                intensity = intensity * intensity * (3 - 2 * intensity)
+
+                shell.Color = LerpColor3(baseColor, Color3.new(1, 1, 1), intensity * 0.3)
+                shell.Transparency = 0.92 - intensity * 0.45
+                shell.Size = source.Size * (1.03 + intensity * 0.07)
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- MODE 9: ELECTRIC ARC
+-- Simulated electrical discharge with per-part crackling and arc flashes
+-- ============================================
+ESPModes["Electric"] = {
+    Name = "Electric",
+    Description = "Electrical discharge with per-part crackling, arc flashes, and chain lightning simulation",
+
+    Setup = function(player, character, baseColor, isTeammate)
+        local layers = {highlights = {}, lights = {}, shells = {}, welds = {}}
+
+        local hl = Instance.new("Highlight")
+        hl.Name = "X3_ESP_Electric"
+        hl.Adornee = character
+        hl.FillColor = Color3.fromRGB(80, 200, 255)
+        hl.FillTransparency = 0.7
+        hl.OutlineColor = Color3.fromRGB(200, 240, 255)
+        hl.OutlineTransparency = 0.0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = character
+        table.insert(layers.highlights, hl)
+
+        for _, partName in ipairs(R6Parts) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                local light = Instance.new("PointLight")
+                light.Name = "X3_ESP_Electric"
+                light.Color = Color3.fromRGB(100, 200, 255)
+                light.Brightness = 1.5; light.Range = 5; light.Shadows = false
+                light.Parent = part
+                table.insert(layers.lights, {light = light, partName = partName})
+
+                local shell = Instance.new("Part")
+                shell.Name = "X3_ESP_ElectricShell"
+                shell.Size = part.Size * 1.04
+                shell.CFrame = part.CFrame
+                shell.Material = Enum.Material.Neon
+                shell.Color = Color3.fromRGB(80, 180, 255)
+                shell.Transparency = 0.85
+                shell.CanCollide = false; shell.CanQuery = false; shell.CanTouch = false
+                shell.Massless = true; shell.Anchored = false; shell.CastShadow = false
+                shell.Parent = character
+
+                if partName == "Head" then
+                    local mesh = Instance.new("SpecialMesh", shell)
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25*1.04,1.25*1.04,1.25*1.04)
+                end
+
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = part; weld.Part1 = shell; weld.Parent = shell
+                table.insert(layers.shells, {part = shell, source = part, partName = partName})
+                table.insert(layers.welds, weld)
+
+                -- Spark particles
+                local sparks = Instance.new("ParticleEmitter")
+                sparks.Name = "X3_ESP_Sparks"
+                sparks.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 240, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 180, 255)),
+                })
+                sparks.Size = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.08),
+                    NumberSequenceKeypoint.new(0.3, 0.04),
+                    NumberSequenceKeypoint.new(1, 0),
+                })
+                sparks.Rate = 0 -- controlled by update
+                sparks.Speed = NumberRange.new(3, 8)
+                sparks.Lifetime = NumberRange.new(0.1, 0.3)
+                sparks.SpreadAngle = Vector2.new(180, 180)
+                sparks.LightEmission = 2
+                sparks.LightInfluence = 0
+                sparks.Acceleration = Vector3.new(0, -20, 0)
+                sparks.Parent = part
+                table.insert(layers.lights, {particle = sparks, partName = partName})
+            end
+        end
+
+        return layers
+    end,
+
+    Update = function(player, layers, baseColor, dt, t)
+        -- Electric colors
+        local coreColor = Color3.fromRGB(80, 200, 255)
+        local flashColor = Color3.fromRGB(230, 250, 255)
+
+        -- Random arc discharge events
+        local majorArc = PoissonEvent("elec_major_" .. player.UserId, 3, dt)
+
+        for _, hl in ipairs(layers.highlights) do
+            if hl and hl.Parent then
+                if majorArc then
+                    hl.FillColor = flashColor
+                    hl.FillTransparency = 0.3
+                    hl.OutlineColor = Color3.new(1, 1, 1)
+                    hl.OutlineTransparency = 0
+                else
+                    hl.FillColor = LerpColor3(hl.FillColor, coreColor, dt * 8)
+                    hl.FillTransparency = hl.FillTransparency + (0.7 - hl.FillTransparency) * dt * 6
+                    hl.OutlineColor = LerpColor3(hl.OutlineColor, Color3.fromRGB(200, 240, 255), dt * 8)
+                    hl.OutlineTransparency = hl.OutlineTransparency + (0.05 - hl.OutlineTransparency) * dt * 6
+                end
+            end
+        end
+
+        for _, lightData in ipairs(layers.lights) do
+            local light = lightData.light
+            local particle = lightData.particle
+            local pn = lightData.partName
+
+            if light and light.Parent then
+                local si = PartSpatialIndex[pn] or {index = 0}
+                local partArc = PoissonEvent("elec_" .. player.UserId .. "_" .. pn, 5, dt)
+
+                if partArc or majorArc then
+                    light.Color = flashColor
+                    light.Brightness = 6 + math.random() * 4
+                    light.Range = 10 + math.random() * 8
+                else
+                    light.Color = LerpColor3(light.Color, coreColor, dt * 10)
+                    -- Constant low-level crackle
+                    local crackle = math.abs(Perlin2D(t * 15, si.index * 7.3))
+                    light.Brightness = 1 + crackle * 1.5
+                    light.Range = 4 + crackle * 3
+                end
+            end
+
+            if particle and particle.Parent then
+                local partArc = PoissonEvent("elec_spark_" .. player.UserId .. "_" .. pn, 4, dt)
+                particle.Rate = partArc and 80 or (majorArc and 40 or 3)
+            end
+        end
+
+        for _, shellData in ipairs(layers.shells) do
+            local shell = shellData.part
+            local source = shellData.source
+            local pn = shellData.partName
+            if shell and shell.Parent and source and source.Parent then
+                local partArc = PoissonEvent("elec_sh_" .. player.UserId .. "_" .. pn, 4, dt)
+
+                if partArc or majorArc then
+                    shell.Color = flashColor
+                    shell.Transparency = 0.5 + math.random() * 0.2
+                    shell.Size = source.Size * (1.02 + math.random() * 0.06)
+                else
+                    shell.Color = LerpColor3(shell.Color, coreColor, dt * 6)
+                    shell.Transparency = shell.Transparency + (0.85 - shell.Transparency) * dt * 5
+                    shell.Size = source.Size * 1.04
+                end
+            end
+        end
+    end,
+}
+
+
+-- ============================================
+-- UNIVERSAL CLEANUP FOR ALL MODES
+-- ============================================
+local function CleanupESPLayers(layerData)
+    if not layerData then return end
+    for _, hl in ipairs(layerData.highlights or {}) do pcall(function() if hl and hl.Parent then hl:Destroy() end end) end
+    for _, lightData in ipairs(layerData.lights or {}) do
+        if type(lightData) == "table" then
+            if lightData.light then pcall(function() if lightData.light.Parent then lightData.light:Destroy() end end) end
+            if lightData.particle then pcall(function() if lightData.particle.Parent then lightData.particle:Destroy() end end) end
+        else
+            pcall(function() if lightData and lightData.Parent then lightData:Destroy() end end)
+        end
+    end
+    for _, shellData in ipairs(layerData.shells or {}) do pcall(function() if shellData.part and shellData.part.Parent then shellData.part:Destroy() end end) end
+    for _, shellData in ipairs(layerData.secondShells or {}) do pcall(function() if shellData.part and shellData.part.Parent then shellData.part:Destroy() end end) end
+    for _, w in ipairs(layerData.welds or {}) do pcall(function() if w and w.Parent then w:Destroy() end end) end
+end
+
+-- Also clean any leftover named instances from character
+local function DeepCleanESP(character)
+    if not character then return end
+    for _, child in pairs(character:GetDescendants()) do
+        if child.Name and child.Name:sub(1, 7) == "X3_ESP_" then
+            pcall(function() child:Destroy() end)
+        end
+    end
+    -- Legacy cleanup
+    for _, child in pairs(character:GetChildren()) do
+        if child.Name == "X3_GlowInner" or child.Name == "X3_GlowOuter" then
+            pcall(function() child:Destroy() end)
+        end
+    end
+    for _, partName in ipairs(R6Parts) do
+        local part = character:FindFirstChild(partName)
+        if part then
+            for _, child in pairs(part:GetChildren()) do
+                if child.Name == "X3_GlowLight" or child.Name:sub(1, 7) == "X3_ESP_" then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end
+    end
+end
+
+
+-- ============================================
+-- MASTER ESP CONTROLLER
+-- Replaces the old StartChams/StopChams/UpdateAllChams system
+-- ============================================
+-- PlayerGlowData is reused from the original script (already declared globally)
+
+-- Override the global functions that the rest of the script calls
+CreateHighlight = function(player)
+    if not player.Character then return nil end
+    local baseColor, isTeammate = GetPlayerESPColor(player)
+    local mode = ESPModes[ChamsMode]
+    if not mode then mode = ESPModes["CS2 Glow"] end
+
+    local layerData = mode.Setup(player, player.Character, baseColor, isTeammate)
+    PlayerGlowData[player] = layerData
+    -- Return first highlight for backwards compatibility with PlayerHighlights
+    return layerData.highlights and layerData.highlights[1] or nil
+end
+
+RemoveHighlight = function(character)
+    DeepCleanESP(character)
+end
+
+UpdateHighlightColors = function()
+    -- This is now handled by the animation loop per-mode Update function
+    -- But we need to handle static updates when animation is off
+    for player, layerData in pairs(PlayerGlowData) do
+        if not layerData then continue end
+        local color = GetPlayerESPColor(player)
+        local mode = ESPModes[ChamsMode]
+        if mode and mode.Update then
+            mode.Update(player, layerData, color, 0.016, tick())
+        end
+    end
+end
+
+-- Master animation loop that drives all ESP modes
+local ESPAnimationConnection = nil
+local ESPAnimationTime = 0
+
+local function StartESPAnimationLoop()
+    if ESPAnimationConnection then return end
+    ESPAnimationTime = tick()
+    ESPAnimationConnection = RunService.Heartbeat:Connect(function(dt)
+        if not ChamsEnabled then return end
+        local t = tick() - ESPAnimationTime + 100 -- offset to avoid t=0 weirdness
+
+        local mode = ESPModes[ChamsMode]
+        if not mode or not mode.Update then return end
+
+        for player, layerData in pairs(PlayerGlowData) do
+            if not layerData then continue end
+            if not player.Character then continue end
+            local baseColor = GetPlayerESPColor(player)
+            local ok, err = pcall(mode.Update, player, layerData, baseColor, dt, t)
+            if not ok then
+                warn("X3 ESP Update error: " .. tostring(err))
             end
         end
     end)
-
-    -- Store connection for cleanup
-    self.Connection = connection
 end
 
-function ESPLibrary:Stop()
-    if self.Connection then
-        self.Connection:Disconnect()
-        self.Connection = nil
-    end
-
-    -- Remove all ESP
-    for _, player in pairs(Players:GetPlayers()) do
-        self:RemoveESP(player)
-    end
-
-    -- Cleanup replicas
-    ReplicaSystem:Cleanup()
-end
-
--- Configuration functions
-function ESPLibrary:Toggle()
-    self.Settings.Enabled = not self.Settings.Enabled
-    return self.Settings.Enabled
-end
-
-function ESPLibrary:SetColor(teamType, element, color, invisibleColor)
-    if invisibleColor then
-        self.Settings.currentColors[teamType][element].Visible = color
-        self.Settings.currentColors[teamType][element].Invisible = invisibleColor
-    else
-        self.Settings.currentColors[teamType][element] = color
+local function StopESPAnimationLoop()
+    if ESPAnimationConnection then
+        ESPAnimationConnection:Disconnect()
+        ESPAnimationConnection = nil
     end
 end
 
-function ESPLibrary:SetSetting(category, setting, value)
-    if self.Settings[category] then
-        self.Settings[category][setting] = value
+-- Override RemoveChamsFromPlayer
+RemoveChamsFromPlayer = function(player)
+    if player.Character then DeepCleanESP(player.Character) end
+    if PlayerGlowData[player] then
+        CleanupESPLayers(PlayerGlowData[player])
+        PlayerGlowData[player] = nil
+    end
+    if PlayerConnections[player] and PlayerConnections[player].HealthChanged then
+        PlayerConnections[player].HealthChanged:Disconnect()
+        PlayerConnections[player].HealthChanged = nil
+    end
+    PlayerHighlights[player] = nil
+end
+
+-- Override UpdateAllChams
+UpdateAllChams = function()
+    local ap = Players:GetPlayers()
+    for i = 1, #ap do
+        if ChamsEnabled then SetupChamsForPlayer(ap[i])
+        else RemoveChamsFromPlayer(ap[i]) end
     end
 end
 
--- Auto-start the ESP
-ESPLibrary:Start()
+-- Override StartChams
+StartChams = function()
+    local ap = Players:GetPlayers()
+    for i = 1, #ap do
+        local p = ap[i]
+        SetupChamsForPlayer(p)
+        if not PlayerConnections[p] then PlayerConnections[p] = {} end
+        if PlayerConnections[p].ChamsCharacterAdded then PlayerConnections[p].ChamsCharacterAdded:Disconnect() end
+        PlayerConnections[p].ChamsCharacterAdded = p.CharacterAdded:Connect(function()
+            task.wait(0.2)
+            if ChamsEnabled then SetupChamsForPlayer(p) end
+        end)
+    end
 
-return ESPLibrary
- 
+    if ActiveConnections.ChamsPlayerAdded then ActiveConnections.ChamsPlayerAdded:Disconnect() end
+    ActiveConnections.ChamsPlayerAdded = Players.PlayerAdded:Connect(function(p)
+        task.wait(1)
+        if ChamsEnabled then
+            SetupChamsForPlayer(p)
+            if not PlayerConnections[p] then PlayerConnections[p] = {} end
+            PlayerConnections[p].ChamsCharacterAdded = p.CharacterAdded:Connect(function()
+                task.wait(0.2)
+                if ChamsEnabled then SetupChamsForPlayer(p) end
+            end)
+        end
+    end)
+
+    if ActiveConnections.ChamsPlayerRemoving then ActiveConnections.ChamsPlayerRemoving:Disconnect() end
+    ActiveConnections.ChamsPlayerRemoving = Players.PlayerRemoving:Connect(function(p)
+        RemoveChamsFromPlayer(p)
+        if PlayerConnections[p] and PlayerConnections[p].ChamsCharacterAdded then
+            PlayerConnections[p].ChamsCharacterAdded:Disconnect()
+            PlayerConnections[p].ChamsCharacterAdded = nil
+        end
+    end)
+
+    -- Start the master animation loop
+    StartESPAnimationLoop()
+end
+
+-- Override StopChams
+StopChams = function()
+    StopESPAnimationLoop()
+    local ap = Players:GetPlayers()
+    for i = 1, #ap do
+        RemoveChamsFromPlayer(ap[i])
+        if PlayerConnections[ap[i]] and PlayerConnections[ap[i]].ChamsCharacterAdded then
+            PlayerConnections[ap[i]].ChamsCharacterAdded:Disconnect()
+            PlayerConnections[ap[i]].ChamsCharacterAdded = nil
+        end
+    end
+    if ActiveConnections.ChamsPlayerAdded then ActiveConnections.ChamsPlayerAdded:Disconnect(); ActiveConnections.ChamsPlayerAdded = nil end
+    if ActiveConnections.ChamsPlayerRemoving then ActiveConnections.ChamsPlayerRemoving:Disconnect(); ActiveConnections.ChamsPlayerRemoving = nil end
+    PlayerHighlights = {}
+    PlayerGlowData = {}
+end
+
+
+-- ============================================
+-- AVAILABLE MODE NAMES (for UI dropdown)
+-- ============================================
+ESPModeNames = {}
+for name, _ in pairs(ESPModes) do
+    table.insert(ESPModeNames, name)
+end
+table.sort(ESPModeNames)
+
+-- Print available modes for verification
+print("X3 PRIV: Advanced ESP loaded with " .. #ESPModeNames .. " modes:")
+for _, name in ipairs(ESPModeNames) do
+    local desc = ESPModes[name].Description or ""
+    print("  - " .. name .. ": " .. desc)
+end
